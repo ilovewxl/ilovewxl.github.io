@@ -1,213 +1,92 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  
-  
-  <title>标签: CTFd | My Blog</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="My Blog">
-<meta property="og:url" content="https://ilovewxl.github.io/tags/CTFd/index.html">
-<meta property="og:site_name" content="My Blog">
-<meta property="og:locale" content="zh_CN">
-<meta property="article:author" content="ilovewxl">
-<meta name="twitter:card" content="summary">
-  
-    <link rel="alternate" href="/atom.xml" title="My Blog" type="application/atom+xml">
-  
-  
-    <link rel="shortcut icon" href="/favicon.png">
-  
-  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Blog</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
   
 <link rel="stylesheet" href="/css/style.css">
 
-  
-    
-<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
-
-  
-  
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.2.0/css/fork-awesome.min.css">
-
 <meta name="generator" content="Hexo 8.1.2"></head>
-
 <body>
-  <div id="container">
-    <div id="wrap">
-      <header id="header">
-  <div id="banner"></div>
-  <div id="header-outer" class="outer">
-    <div id="header-title" class="inner">
-      <h1 id="logo-wrap">
-        <a href="/" id="logo">My Blog</a>
-      </h1>
-      
-    </div>
-    <div id="header-inner" class="inner">
-      <nav id="main-nav">
-        <a id="main-nav-toggle" class="nav-icon"><span class="fa fa-bars"></span></a>
-        
-          <a class="main-nav-link" href="/">Home</a>
-        
-          <a class="main-nav-link" href="/archives">Archives</a>
-        
-      </nav>
-      <nav id="sub-nav">
-        
-        
-          <a class="nav-icon" href="/atom.xml" title="RSS 订阅"><span class="fa fa-rss"></span></a>
-        
-        <a class="nav-icon nav-search-btn" title="搜索"><span class="fa fa-search"></span></a>
-      </nav>
-      <div id="search-form-wrap">
-        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="搜索"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="https://ilovewxl.github.io"></form>
+
+  <!-- 星空 -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 薄雾 -->
+  <div class="mist-layer">
+    <div class="mist"></div><div class="mist"></div><div class="mist"></div>
+  </div>
+
+  <!-- 花瓣 -->
+  <div class="petal-container" id="petalContainer"></div>
+
+  <!-- 导航 -->
+  <nav id="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo">My Blog</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/archives">文章</a>
+        <a href="/about">关于</a>
       </div>
     </div>
+  </nav>
+
+  <!-- 内容 -->
+  <main class="content-layer">
+    <section class="hero">
+  <div>
+    <h1 class="hero-title">My Blog</h1>
+    <div class="hero-dec"></div>
+    <p class="hero-sub">以青瓷为骨 · 以鎏金为韵 · 以云纹为魂</p>
   </div>
-</header>
-
-      <div class="outer">
-        <section id="main">
-  
-  
-    
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2026" class="archive-year">2026</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      <a href="/2026/06/18/CTFd-%E5%B9%B3%E5%8F%B0%E6%90%AD%E5%BB%BA%E6%8C%87%E5%8D%97/" class="archive-article-date">
-  <time class="dt-published" datetime="2026-06-18T12:55:18.000Z" itemprop="datePublished">6月 18</time>
-</a>
-      
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2026/06/18/CTFd-%E5%B9%B3%E5%8F%B0%E6%90%AD%E5%BB%BA%E6%8C%87%E5%8D%97/">CTFd 平台搭建指南</a>
-    </h1>
-  
-
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
-  
-
-
 </section>
-        
-          <aside id="sidebar">
-  
+
+<section class="section-container">
+  <h2 class="section-title">✦ 最新文章 ✦</h2>
+  <p class="section-sub">笔墨之间，记录所思所想</p>
+  <div class="articles-list">
     
-
-  
+      <article class="cloud-card article-card" onclick="location.href='/2026/06/18/CTFd-%E5%B9%B3%E5%8F%B0%E6%90%AD%E5%BB%BA%E6%8C%87%E5%8D%97/'">
+        <div class="article-meta">
+          <span class="article-date">2026-06-18</span>
+          
+            <span class="article-tags">CTF · CTFd · Docker</span>
+          
+        </div>
+        <h3 class="article-title">CTFd 平台搭建指南</h3>
+        <p class="card-desc">阅读全文...</p>
+        <a href="/2026/06/18/CTFd-%E5%B9%B3%E5%8F%B0%E6%90%AD%E5%BB%BA%E6%8C%87%E5%8D%97/" class="read-more">阅读 →</a>
+      </article>
     
-  <div class="widget-wrap">
-    <h3 class="widget-title">标签</h3>
-    <div class="widget">
-      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/CTF/" rel="tag">CTF</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CTFd/" rel="tag">CTFd</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Docker/" rel="tag">Docker</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Python/" rel="tag">Python</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/SQL/" rel="tag">SQL</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Web-%E5%AE%89%E5%85%A8/" rel="tag">Web 安全</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E5%86%85%E7%BD%91%E6%B8%97%E9%80%8F/" rel="tag">内网渗透</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E6%9D%83%E9%99%90%E6%8F%90%E5%8D%87/" rel="tag">权限提升</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E6%B3%A8%E5%85%A5/" rel="tag">注入</a></li></ul>
-    </div>
   </div>
+</section>
 
+  </main>
 
-  
-    
-  <div class="widget-wrap">
-    <h3 class="widget-title">标签云</h3>
-    <div class="widget tagcloud">
-      <a href="/tags/CTF/" style="font-size: 10px;">CTF</a> <a href="/tags/CTFd/" style="font-size: 10px;">CTFd</a> <a href="/tags/Docker/" style="font-size: 10px;">Docker</a> <a href="/tags/Python/" style="font-size: 10px;">Python</a> <a href="/tags/SQL/" style="font-size: 10px;">SQL</a> <a href="/tags/Web-%E5%AE%89%E5%85%A8/" style="font-size: 10px;">Web 安全</a> <a href="/tags/%E5%86%85%E7%BD%91%E6%B8%97%E9%80%8F/" style="font-size: 10px;">内网渗透</a> <a href="/tags/%E6%9D%83%E9%99%90%E6%8F%90%E5%8D%87/" style="font-size: 10px;">权限提升</a> <a href="/tags/%E6%B3%A8%E5%85%A5/" style="font-size: 10px;">注入</a>
-    </div>
-  </div>
+  <!-- 页脚 -->
+  <footer>
+    <div class="footer-logo">My Blog</div>
+    <p>© 2026 ilovewxl</p>
+  </footer>
 
-  
-    
-  <div class="widget-wrap">
-    <h3 class="widget-title">归档</h3>
-    <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2026/06/">六月 2026</a></li></ul>
-    </div>
-  </div>
-
-
-  
-    
-  <div class="widget-wrap">
-    <h3 class="widget-title">最新文章</h3>
-    <div class="widget">
-      <ul>
-        
-          <li>
-            <a href="/2026/06/18/hello-world/">Hello World</a>
-          </li>
-        
-          <li>
-            <a href="/2026/06/18/SQL-%E6%B3%A8%E5%85%A5%E5%85%A5%E9%97%A8%E4%B8%8E%E8%BF%9B%E9%98%B6/">SQL 注入入门与进阶</a>
-          </li>
-        
-          <li>
-            <a href="/2026/06/18/Python-pth-%E5%8A%AB%E6%8C%81%E5%8E%9F%E7%90%86%E4%B8%8E%E5%88%A9%E7%94%A8/">Python.pth 劫持原理与利用</a>
-          </li>
-        
-          <li>
-            <a href="/2026/06/18/CTFd-%E5%B9%B3%E5%8F%B0%E6%90%AD%E5%BB%BA%E6%8C%87%E5%8D%97/">CTFd 平台搭建指南</a>
-          </li>
-        
-      </ul>
-    </div>
-  </div>
-
-  
-</aside>
-        
-      </div>
-      <footer id="footer">
-  
-  <div class="outer">
-    <div id="footer-info" class="inner">
-      
-      &copy; 2026 ilovewxl<br>
-      Powered by <a href="https://hexo.io/" target="_blank">Hexo</a>
-    </div>
-  </div>
-</footer>
-
-    </div>
-    <nav id="mobile-nav">
-  
-    <a href="/" class="mobile-nav-link">Home</a>
-  
-    <a href="/archives" class="mobile-nav-link">Archives</a>
-  
-</nav>
-    
-
-
-<script src="/js/jquery-3.6.4.min.js"></script>
-
-
-
-  
-<script src="/fancybox/jquery.fancybox.min.js"></script>
-
-
-
-
-<script src="/js/script.js"></script>
-
-
-
-
-
-  </div>
+  <script>
+    // 星空粒子
+    const c = document.getElementById('stars-canvas'), ctx = c.getContext('2d');
+    let stars = [];
+    function rs() { c.width = innerWidth; c.height = innerHeight; }
+    rs(); addEventListener('resize', rs);
+    for (let i = 200; i--;) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.8+0.3,a:Math.random(),s:Math.random()*0.008+0.003});
+    function dr() { ctx.clearRect(0,0,c.width,c.height); for (const st of stars) { st.a+=st.s; const o=(Math.sin(st.a)+1)/2*0.6+0.1; ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(240,245,242,${o})`; ctx.fill(); } requestAnimationFrame(dr); }
+    dr();
+    // 花瓣
+    const pc = document.getElementById('petalContainer');
+    for (let i = 20; i--;) { const p=document.createElement('div'); p.className='petal'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*10+14)+'s'; p.style.animationDelay=Math.random()*20+'s'; p.style.width=(Math.random()*10+10)+'px'; p.style.height=p.style.width; pc.appendChild(p); }
+    // 导航滚动
+    addEventListener('scroll',()=>document.getElementById('navbar').classList.toggle('scrolled',scrollY>60));
+  </script>
 </body>
 </html>
