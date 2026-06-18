@@ -1,0 +1,14 @@
+<section class="section-container" style="padding-top: 140px;">
+  <article class="post-card">
+    <h1 class="post-title"><%= page.title %></h1>
+    <div class="post-meta">
+      <span><%= date(page.date, 'YYYY-MM-DD') %></span>
+      <% if(page.tags && page.tags.length){ %>
+        <span style="margin-left: 16px;color:rgba(201,169,110,0.6);"><%= page.tags.map(function(t){ return t.name; }).join(' · ') %></span>
+      <% } %>
+    </div>
+    <div class="post-content">
+      <%- page.content %>
+    </div>
+  </article>
+</section>

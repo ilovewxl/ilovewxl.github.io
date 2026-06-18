@@ -1,0 +1,27 @@
+<section class="hero">
+  <div>
+    <h1 class="hero-title"><%= config.title %></h1>
+    <div class="hero-dec"></div>
+    <p class="hero-sub"><%= config.description || '以青瓷为骨 · 以鎏金为韵 · 以云纹为魂' %></p>
+  </div>
+</section>
+
+<section class="section-container">
+  <h2 class="section-title">✦ 最新文章 ✦</h2>
+  <p class="section-sub">笔墨之间，记录所思所想</p>
+  <div class="articles-list">
+    <% page.posts.each(function(post){ %>
+      <article class="cloud-card article-card" onclick="location.href='<%- url_for(post.path) %>'">
+        <div class="article-meta">
+          <span class="article-date"><%= date(post.date, 'YYYY-MM-DD') %></span>
+          <% if(post.tags && post.tags.length){ %>
+            <span class="article-tags"><%= post.tags.map(function(t){ return t.name; }).join(' · ') %></span>
+          <% } %>
+        </div>
+        <h3 class="article-title"><%= post.title %></h3>
+        <p class="card-desc"><%= post.excerpt ? strip_html(post.excerpt) : '阅读全文...' %></p>
+        <a href="<%- url_for(post.path) %>" class="read-more">阅读 →</a>
+      </article>
+    <% }) %>
+  </div>
+</section>

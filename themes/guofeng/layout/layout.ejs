@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= config.title %><%= page.title ? ' · ' + page.title : '' %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  <%- css('/css/style') %>
+</head>
+<body>
+
+  <!-- 星空 -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 薄雾 -->
+  <div class="mist-layer">
+    <div class="mist"></div><div class="mist"></div><div class="mist"></div>
+  </div>
+
+  <!-- 花瓣 -->
+  <div class="petal-container" id="petalContainer"></div>
+
+  <!-- 导航 -->
+  <nav id="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo"><%= config.title %></a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/archives">文章</a>
+        <a href="/about">关于</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 内容 -->
+  <main class="content-layer">
+    <%- body %>
+  </main>
+
+  <!-- 页脚 -->
+  <footer>
+    <div class="footer-logo"><%= config.title %></div>
+    <p>© <%= date(new Date(), 'YYYY') %> <%= config.author || config.title %></p>
+  </footer>
+
+  <script>
+    // 星空粒子
+    const c = document.getElementById('stars-canvas'), ctx = c.getContext('2d');
+    let stars = [];
+    function rs() { c.width = innerWidth; c.height = innerHeight; }
+    rs(); addEventListener('resize', rs);
+    for (let i = 200; i--;) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.8+0.3,a:Math.random(),s:Math.random()*0.008+0.003});
+    function dr() { ctx.clearRect(0,0,c.width,c.height); for (const st of stars) { st.a+=st.s; const o=(Math.sin(st.a)+1)/2*0.6+0.1; ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(240,245,242,${o})`; ctx.fill(); } requestAnimationFrame(dr); }
+    dr();
+    // 花瓣
+    const pc = document.getElementById('petalContainer');
+    for (let i = 20; i--;) { const p=document.createElement('div'); p.className='petal'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*10+14)+'s'; p.style.animationDelay=Math.random()*20+'s'; p.style.width=(Math.random()*10+10)+'px'; p.style.height=p.style.width; pc.appendChild(p); }
+    // 导航滚动
+    addEventListener('scroll',()=>document.getElementById('navbar').classList.toggle('scrolled',scrollY>60));
+  </script>
+</body>
+</html>
