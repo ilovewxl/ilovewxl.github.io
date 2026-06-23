@@ -1,4 +1,15 @@
-# Python 沙箱逃逸全解：从入门到实战
+---
+title: Python 沙箱逃逸全解：从入门到实战
+date: 2026-06-23 22:00:00
+tags:
+- Python
+- 沙箱逃逸
+- CTF
+- SCTF
+- 代码审计
+categories:
+- 安全研究
+---
 
 > 涵盖 SCTF Rule Lab 等多种经典题型，系统化拆解 Python 沙箱逃逸的底层原理与绕过手法
 
